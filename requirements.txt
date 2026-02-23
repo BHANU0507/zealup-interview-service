@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pydantic
+python-multipart
+boto3
+python-dotenv
+playwright
+jinja2
+httpx

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Resume – Professional Blue</title>
+  <style>
+    :root {
+      --accent:    #0ea5e9;
+      --pm-top:    8mm;
+      --pm-bottom: 5mm;
+      --pm-left:   8mm;
+      --pm-right:  8mm;
+      --photo-size: 52px;
+    }
+
+    @page { size: A4; margin: 0; }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 11px;
+      line-height: 1.4;
+      color: #111;
+      background: #e5e7eb;
+    }
+
+    .page-wrapper {
+      width: 210mm;
+      height: 297mm;
+      overflow: hidden;
+      margin: 28px auto;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+    }
+
+    @media print {
+      body { background: none; }
+      .page-wrapper {
+        width: 100%; height: 100vh;
+        margin: 0; box-shadow: none; overflow: hidden;
+      }
+      header { background: #1e3a5f !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .col-left  { background: #f5f5f5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .col-right { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    header {
+      background: #1e3a5f;
+      color: #fff;
+      padding: var(--pm-top) var(--pm-right) 10mm var(--pm-left);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+
+    .header-text    { flex: 1; min-width: 0; }
+    .header-text h1 { font-size: 22px; font-weight: bold; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; line-height: 1.2; }
+    .header-text p  { font-size: 11px; opacity: .9; }
+
+    .header-photo {
+      width:  var(--photo-size);
+      height: var(--photo-size);
+      border-radius: 50%;
+      overflow: hidden;
+      flex-shrink: 0;
+      border: 2px solid rgba(255,255,255,0.4);
+      background: rgba(255,255,255,0.15);
+      display: none;
+    }
+    .header-photo.visible { display: block; }
+    .header-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    .body-grid {
+      flex: 1; min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      overflow-y: auto;
+    }
+
+    .col-left  { background: #f5f5f5; padding: 10mm var(--pm-right) var(--pm-bottom) var(--pm-left); overflow-y: auto; }
+    .col-right { background: #fff;    padding: 10mm var(--pm-right) var(--pm-bottom) var(--pm-left); overflow-y: auto; }
+
+    section { margin-bottom: 14px; }
+
+    .col-left h2 {
+      font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: .05em;
+      border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-bottom: 7px;
+    }
+    .col-right h2 {
+      font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: .05em;
+      border-bottom: 2px solid var(--accent); padding-bottom: 4px; margin-bottom: 7px;
+    }
+
+    .summary-text { white-space: pre-wrap; }
+
+    .exp-item    { margin-bottom: 10px; }
+    .exp-title   { font-weight: bold; margin-bottom: 2px; }
+    .exp-date    { font-size: 10px; color: #555; margin-bottom: 3px; }
+    .bullet-list { list-style: none; padding-left: 0; margin-top: 2px; }
+    .bullet-list li { display: flex; align-items: flex-start; margin-bottom: 2px; }
+    .bul         { width: 1ch; flex-shrink: 0; }
+    .bul-text    { flex: 1; min-width: 0; }
+
+    .proj-item   { margin-bottom: 10px; }
+    .proj-title  { font-weight: bold; margin-bottom: 2px; }
+    .proj-stack  { font-size: 10px; color: #555; margin-bottom: 3px; }
+
+    .edu-item    { margin-bottom: 8px; }
+    .edu-degree  { font-weight: bold; margin-bottom: 2px; }
+    .edu-inst    { margin-bottom: 2px; }
+    .edu-date    { font-size: 10px; color: #555; }
+
+    .cert-item   { margin-bottom: 6px; }
+    .cert-title  { font-weight: bold; margin-bottom: 2px; }
+    .cert-issuer { font-size: 10px; color: #555; }
+
+    .skills-grouped p { margin-bottom: 4px; }
+
+    .ach-item    { margin-bottom: 8px; }
+    .ach-title   { font-weight: bold; margin-bottom: 2px; }
+    .ach-desc    { font-size: 10px; color: #555; }
+
+    .inline-text { margin: 0; }
+  </style>
+</head>
+<body>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const photo     = document.getElementById('header-photo');
+    const nameEl    = document.getElementById('header-name');
+    const contactEl = document.getElementById('header-contact');
+
+    {% if profile_image %}
+    photo.querySelector('img').src = '{{ profile_image }}';
+    const nameH    = nameEl.getBoundingClientRect().height;
+    const contactH = contactEl.getBoundingClientRect().height;
+    const totalH   = Math.round(nameH + 4 + contactH);
+    document.documentElement.style.setProperty('--photo-size', totalH + 'px');
+    photo.classList.add('visible');
+    {% endif %}
+
+     /* Apply dynamic page margins if available */
+    const margins = {% if resume.pageMargins %}{
+      top: {{ (resume.pageMargins.top | float) if resume.pageMargins.get('top') else 'null' }},
+      bottom: {{ (resume.pageMargins.bottom | float) if resume.pageMargins.get('bottom') else 'null' }},
+      left: {{ (resume.pageMargins.left | float) if resume.pageMargins.get('left') else 'null' }},
+      right: {{ (resume.pageMargins.right | float) if resume.pageMargins.get('right') else 'null' }}
+    }{% else %}null{% endif %};
+    if (margins && margins.top) document.documentElement.style.setProperty('--pm-top', margins.top + 'mm');
+    if (margins && margins.bottom) document.documentElement.style.setProperty('--pm-bottom', margins.bottom + 'mm');
+    if (margins && margins.left) document.documentElement.style.setProperty('--pm-left', margins.left + 'mm');
+    if (margins && margins.right) document.documentElement.style.setProperty('--pm-right', margins.right + 'mm');
+  });
+</script>
+
+<div class="page-wrapper">
+
+  <header>
+    <div class="header-text">
+      <h1 id="header-name">
+        {% if resume.personal.fullName %}{{ resume.personal.fullName }}
+        {% elif resume.fullName %}{{ resume.fullName }}
+        {% else %}YOUR NAME{% endif %}
+      </h1>
+      <p id="header-contact">
+        {% set contact_items = [] %}
+        {% if resume.personal.phone %}{% set _ = contact_items.append(resume.personal.phone) %}{% endif %}
+        {% if resume.personal.email %}{% set _ = contact_items.append(resume.personal.email) %}{% endif %}
+        {% if resume.personal.linkedin %}{% set _ = contact_items.append(resume.personal.linkedin) %}{% endif %}
+        {% if resume.personal.location %}{% set _ = contact_items.append(resume.personal.location) %}{% endif %}
+        {{ contact_items | join(' &nbsp;|&nbsp; ') }}
+      </p>
+    </div>
+    <div class="header-photo" id="header-photo">
+      <img src="" alt="Profile photo" />
+    </div>
+  </header>
+
+  <div class="body-grid">
+
+    <div class="col-left">
+
+      {% if resume.summary %}
+      <section>
+        <h2>Summary</h2>
+        <p class="summary-text">{{ resume.summary }}</p>
+      </section>
+      {% endif %}
+
+      {% if resume.experience and resume.experience|length > 0 %}
+      <section>
+        <h2>Experience</h2>
+        {% for exp in resume.experience %}
+        <div class="exp-item">
+          <p class="exp-title">{{ exp.jobTitle }} – {{ exp.company }}</p>
+          <p class="exp-date">{{ exp.startDate }}{% if exp.currentlyWorking %} – Present{% elif exp.endDate %} – {{ exp.endDate }}{% endif %}</p>
+          {% if exp.description %}
+            {% set bullets = exp.description.split('.') %}
+            {% if bullets|length > 1 %}
+            <ul class="bullet-list">
+              {% for bullet in bullets %}
+                {% if bullet.strip() %}<li><span class="bul">•</span><span class="bul-text">{{ bullet.strip() }}{% if not bullet.strip().endswith('.') %}.{% endif %}</span></li>{% endif %}
+              {% endfor %}
+            </ul>
+            {% endif %}
+          {% endif %}
+        </div>
+        {% endfor %}
+      </section>
+      {% endif %}
+
+      {% if resume.projects and resume.projects|length > 0 %}
+      <section>
+        <h2>Projects</h2>
+        {% for proj in resume.projects %}
+        <div class="proj-item">
+          <p class="proj-title">{{ proj.title }}</p>
+          {% if proj.techStack %}<p class="proj-stack">{{ proj.techStack }}</p>{% endif %}
+          {% if proj.description %}
+            {% set bullets = proj.description.split('.') %}
+            {% if bullets|length > 1 %}
+            <ul class="bullet-list">
+              {% for bullet in bullets %}
+                {% if bullet.strip() %}<li><span class="bul">•</span><span class="bul-text">{{ bullet.strip() }}{% if not bullet.strip().endswith('.') %}.{% endif %}</span></li>{% endif %}
+              {% endfor %}
+            </ul>
+            {% endif %}
+          {% endif %}
+        </div>
+        {% endfor %}
+      </section>
+      {% endif %}
+
+    </div>
+
+    <div class="col-right">
+
+      {% if resume.education and resume.education|length > 0 %}
+      <section>
+        <h2>Education</h2>
+        {% for edu in resume.education %}
+        <div class="edu-item">
+          <p class="edu-degree">{{ edu.degree }}{% if edu.gpa %} | GPA: {{ edu.gpa }}{% endif %}</p>
+          <p class="edu-inst">{{ edu.institution }}</p>
+          <p class="edu-date">{{ edu.startDate }}{% if edu.currentlyStudying %} – Present{% elif edu.endDate %} – {{ edu.endDate }}{% endif %}</p>
+        </div>
+        {% endfor %}
+      </section>
+      {% endif %}
+
+      {% if resume.certifications and resume.certifications|length > 0 %}
+      <section>
+        <h2>Certifications</h2>
+        {% for cert in resume.certifications %}
+        <div class="cert-item">
+          <p class="cert-title">{{ cert.title }}</p>
+          <p class="cert-issuer">{{ cert.issuer }}{% if cert.date %} ({{ cert.date }}){% endif %}</p>
+        </div>
+        {% endfor %}
+      </section>
+      {% endif %}
+
+      {% if resume.skill and resume.skill.technical %}
+      <section>
+        <h2>Skills</h2>
+        <div class="skills-grouped">
+          {% for group in resume.skill.technical %}
+          <p><strong>{{ group.category }}:</strong> {{ group.skills | join(', ') }}</p>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      {% if resume.keyAchievements and resume.keyAchievements|length > 0 %}
+      <section>
+        <h2>Key Achievements</h2>
+        {% for achievement in resume.keyAchievements %}
+        <div class="ach-item">
+          <p class="ach-title">{{ achievement.title }}{% if achievement.date %} <span style="font-weight: normal; font-size: 10px; color: #555;">{{ achievement.date }}</span>{% endif %}</p>
+          {% if achievement.description %}<p class="ach-desc">{{ achievement.description }}</p>{% endif %}
+        </div>
+        {% endfor %}
+      </section>
+      {% endif %}
+
+      {% if resume.languages and resume.languages|length > 0 %}
+      <section>
+        <h2>Languages</h2>
+        <p class="inline-text">
+          {% for lang in resume.languages %}
+            {{ lang.language }}{% if lang.level %} ({{ lang.level }}){% endif %}{% if not loop.last %}, {% endif %}
+          {% endfor %}
+        </p>
+      </section>
+      {% endif %}
+
+      {% if resume.interests and resume.interests|length > 0 %}
+      <section>
+        <h2>Interests</h2>
+        <p class="inline-text">
+          {% for interest in resume.interests %}
+            {{ interest.title }}{% if not loop.last %}, {% endif %}
+          {% endfor %}
+        </p>
+      </section>
+      {% endif %}
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

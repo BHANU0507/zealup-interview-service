@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Resume – Classic (Default)</title>
+  <style>
+    :root {
+      --pm-top:    8mm;
+      --pm-bottom: 5mm;
+      --pm-left:   8mm;
+      --pm-right:  8mm;
+    }
+
+    @page {
+      size: A4;
+      margin: var(--pm-top) var(--pm-right) var(--pm-bottom) var(--pm-left);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 11px;
+      line-height: 1.35;
+      color: #111;
+      background: #e5e7eb;
+    }
+
+    .page-wrapper {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 28px auto;
+      background: #fff;
+      padding: var(--pm-top) var(--pm-right) var(--pm-bottom) var(--pm-left);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+    }
+
+    @media print {
+      body { background: none; }
+      .page-wrapper {
+        width: 100%; min-height: 0;
+        margin: 0; padding: 0;
+        box-shadow: none;
+      }
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .header-text {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .header-text.no-image {
+      align-items: center;
+      text-align: center;
+    }
+
+    .header-text h1 {
+      font-size: 22px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: .02em;
+      margin-bottom: 3px;
+    }
+    .header-text p {
+      font-size: 11px;
+      color: #333;
+    }
+    .header-text a { color: #2563eb; text-decoration: none; }
+
+    .header-photo {
+      flex-shrink: 0;
+      width: 52px;
+      height: 52px;
+      overflow: hidden;
+      border: 1px solid #d1d5db;
+      background: #f3f4f6;
+    }
+    .header-photo img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* ── Sections ── */
+    section { margin-bottom: 16px; }
+
+    h2 {
+      font-size: 12px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      border-bottom: 1px solid #000;
+      padding-bottom: 4px;
+      margin-bottom: 8px;
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+
+    .exp-item, .edu-item, .proj-item, .cert-item, .ach-item {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    /* ── Summary ── */
+    .summary-list    { margin: 0; padding-left: 18px; }
+    .summary-list li { margin-bottom: 4px; }
+
+    /* ── Experience ── */
+    .exp-list        { margin: 0; padding-left: 0; list-style: none; }
+    .exp-item        { margin-bottom: 12px; }
+    .exp-row         { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; }
+    .exp-row .date   { font-size: 10px; color: #555; }
+    .exp-sub         { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+    .exp-sub em      { font-size: 10px; }
+    .exp-sub .loc    { font-size: 10px; color: #555; }
+    .bullet-list     { margin: 4px 0 0; padding-left: 18px; list-style-type: disc; list-style-position: outside; }
+    .bullet-list li  { margin-bottom: 2px; display: list-item; }
+
+    /* ── Skills ── */
+    .skills-grouped    { margin: 0; padding-left: 18px; list-style: none; }
+    .skills-grouped li { margin-bottom: 6px; break-inside: avoid; page-break-inside: avoid; }
+
+    /* ── Education ── */
+    .edu-list      { margin: 0; padding-left: 0; list-style: none; }
+    .edu-item      { margin-bottom: 8px; }
+    .edu-row       { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; }
+    .edu-row .date { font-size: 10px; color: #555; }
+    .edu-sub       { margin-top: 2px; }
+    .edu-sub em    { font-size: 10px; }
+    .edu-sub .gpa  { font-size: 10px; color: #555; margin-left: 8px; }
+
+    /* ── Projects ── */
+    .proj-list         { margin: 0; padding-left: 0; list-style: none; }
+    .proj-item         { margin-bottom: 12px; }
+    .proj-title        { margin-bottom: 2px; }
+    .proj-title .tech  { font-size: 10px; color: #555; }
+
+    /* ── Certifications ── */
+    .cert-list         { margin: 0; padding-left: 0; list-style: none; }
+    .cert-item         { margin-bottom: 8px; }
+    .cert-row          { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; align-items: baseline; }
+    .cert-row .date    { font-size: 10px; color: #555; }
+    .cert-issuer       { font-size: 10px; color: #555; margin-top: 2px; }
+
+    /* ── Achievements ── */
+    .ach-list  { margin: 0; padding-left: 18px; }
+    .ach-item  { margin-bottom: 6px; }
+
+    /* ── Languages / Interests ── */
+    .inline-list { margin: 0; }
+  </style>
+</head>
+<body>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const headerText = document.getElementById('header-text');
+    const photo      = document.getElementById('header-photo');
+
+    const profileImage = '{{ profile_image }}';
+    if (profileImage && photo) {
+      photo.style.display = 'block';
+      photo.querySelector('img').src = profileImage;
+    } else if (headerText) {
+      headerText.classList.add('no-image');
+    }
+
+    /* Apply dynamic page margins if available */
+    const margins = {% if resume.pageMargins %}{
+      top: {{ (resume.pageMargins.top | float) if resume.pageMargins.get('top') else 'null' }},
+      bottom: {{ (resume.pageMargins.bottom | float) if resume.pageMargins.get('bottom') else 'null' }},
+      left: {{ (resume.pageMargins.left | float) if resume.pageMargins.get('left') else 'null' }},
+      right: {{ (resume.pageMargins.right | float) if resume.pageMargins.get('right') else 'null' }}
+    }{% else %}null{% endif %};
+    if (margins && margins.top) document.documentElement.style.setProperty('--pm-top', margins.top + 'mm');
+    if (margins && margins.bottom) document.documentElement.style.setProperty('--pm-bottom', margins.bottom + 'mm');
+    if (margins && margins.left) document.documentElement.style.setProperty('--pm-left', margins.left + 'mm');
+    if (margins && margins.right) document.documentElement.style.setProperty('--pm-right', margins.right + 'mm');
+  });
+</script>
+
+<div class="page-wrapper">
+
+  <header id="resume-header">
+    <div class="header-text" id="header-text">
+      <h1>
+        {% if resume.personal.fullName %}{{ resume.personal.fullName }}
+        {% elif resume.fullName %}{{ resume.fullName }}
+        {% else %}YOUR NAME{% endif %}
+      </h1>
+      <p>
+        {% set contact_items = [] %}
+        {% if resume.personal.phone %}{% set _ = contact_items.append(resume.personal.phone) %}{% endif %}
+        {% if resume.personal.email %}{% set _ = contact_items.append('<a href="mailto:' + resume.personal.email + '">' + resume.personal.email + '</a>') %}{% endif %}
+        {% if resume.personal.linkedin %}{% set _ = contact_items.append('<a href="https://' + resume.personal.linkedin + '" target="_blank">' + resume.personal.linkedin + '</a>') %}{% endif %}
+        {% if resume.personal.location %}{% set _ = contact_items.append(resume.personal.location) %}{% endif %}
+        {{ contact_items | join(' &nbsp;|&nbsp; ') | safe }}
+      </p>
+    </div>
+    {% if profile_image %}<div class="header-photo" id="header-photo"><img src="" alt="Profile"></div>{% endif %}
+  </header>
+
+  {% if resume.summary %}
+  <section>
+    <h2>Summary</h2>
+    <p style="margin: 0;">{{ resume.summary }}</p>
+  </section>
+  {% endif %}
+
+  {% if resume.experience and resume.experience|length > 0 %}
+  <section>
+    <h2>Experience</h2>
+    <ul class="exp-list">
+      {% for exp in resume.experience %}
+      <li class="exp-item">
+        <div class="exp-row">
+          <strong>{{ exp.jobTitle }}</strong>
+          <span class="date">{{ exp.startDate }}{% if exp.currentlyWorking %} – Present{% elif exp.endDate %} – {{ exp.endDate }}{% endif %}</span>
+        </div>
+        <div class="exp-sub">
+          <em>{{ exp.company }}</em>
+          {% if resume.personal.location %}<span class="loc">{{ resume.personal.location }}</span>{% endif %}
+        </div>
+        {% if exp.description %}
+          {% set bullets = exp.description.split('.') %}
+          {% if bullets|length > 1 %}
+          <ul class="bullet-list">
+            {% for bullet in bullets %}
+              {% if bullet.strip() %}<li>{{ bullet.strip() }}{% if not bullet.strip().endswith('.') %}.{% endif %}</li>{% endif %}
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p style="margin: 4px 0 0;">{{ exp.description }}</p>
+          {% endif %}
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if resume.skill and resume.skill.technical %}
+  <section>
+    <h2>Technical Skills</h2>
+    <ul class="skills-grouped">
+      {% for group in resume.skill.technical %}
+      <li><strong>{{ group.category }}:</strong> {{ group.skills | join(', ') }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if resume.education and resume.education|length > 0 %}
+  <section>
+    <h2>Education</h2>
+    <ul class="edu-list">
+      {% for edu in resume.education %}
+      <li class="edu-item">
+        <div class="edu-row">
+          <strong>{{ edu.institution }}</strong>
+          <span class="date">{{ edu.startDate }}{% if edu.currentlyStudying %} – Present{% elif edu.endDate %} – {{ edu.endDate }}{% endif %}</span>
+        </div>
+        <div class="edu-sub">
+          <em>{{ edu.degree }}</em>
+          {% if edu.gpa %}<span class="gpa">GPA: {{ edu.gpa }}</span>{% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if resume.projects and resume.projects|length > 0 %}
+  <section>
+    <h2>Projects</h2>
+    <ul class="proj-list">
+      {% for proj in resume.projects %}
+      <li class="proj-item">
+        <div class="proj-title">
+          <strong>{{ proj.title }}</strong>
+          {% if proj.techStack %}<span class="tech"> — {{ proj.techStack }}</span>{% endif %}
+        </div>
+        {% if proj.description %}
+          {% set bullets = proj.description.split('.') %}
+          {% if bullets|length > 1 %}
+          <ul class="bullet-list">
+            {% for bullet in bullets %}
+              {% if bullet.strip() %}<li>{{ bullet.strip() }}{% if not bullet.strip().endswith('.') %}.{% endif %}</li>{% endif %}
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p style="margin: 4px 0 0;">{{ proj.description }}</p>
+          {% endif %}
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if resume.certifications and resume.certifications|length > 0 %}
+  <section>
+    <h2>Certifications</h2>
+    <ul class="cert-list">
+      {% for cert in resume.certifications %}
+      <li class="cert-item">
+        <div class="cert-row">
+          <strong>{{ cert.title }}</strong>
+          {% if cert.date %}<span class="date">{{ cert.date }}</span>{% endif %}
+        </div>
+        {% if cert.issuer %}<div class="cert-issuer">{{ cert.issuer }}</div>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if resume.keyAchievements and resume.keyAchievements|length > 0 %}
+  <section>
+    <h2>Achievements</h2>
+    <ul class="ach-list">
+      {% for achievement in resume.keyAchievements %}
+      <li class="ach-item">
+        <strong>{{ achievement.title }}</strong>
+        {% if achievement.description %}
+          {% set bullets = achievement.description.split('.') %}
+          {% if bullets|length > 1 %}
+          <ul class="bullet-list">
+            {% for bullet in bullets %}
+              {% if bullet.strip() %}<li>{{ bullet.strip() }}{% if not bullet.strip().endswith('.') %}.{% endif %}</li>{% endif %}
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p style="margin: 4px 0 0;">{{ achievement.description }}</p>
+          {% endif %}
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if resume.languages and resume.languages|length > 0 %}
+  <section>
+    <h2>Languages</h2>
+    <p class="inline-list">
+      {% for lang in resume.languages %}
+        {{ lang.language }}{% if lang.level %} ({{ lang.level }}){% endif %}{% if not loop.last %}, {% endif %}
+      {% endfor %}
+    </p>
+  </section>
+  {% endif %}
+
+  {% if resume.interests and resume.interests|length > 0 %}
+  <section>
+    <h2>Interests</h2>
+    <p class="inline-list">
+      {% for interest in resume.interests %}
+        {{ interest.title }}{% if not loop.last %}, {% endif %}
+      {% endfor %}
+    </p>
+  </section>
+  {% endif %}
+
+</div>
+
+</body>
+</html>
+
+
