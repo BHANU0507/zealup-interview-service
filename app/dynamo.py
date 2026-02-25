@@ -10,6 +10,7 @@ AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 DYNAMODB_TABLE = os.getenv("DYNAMODB_TABLE")
 DYNAMODB_TABLE2 = os.getenv("DYNAMODB_TABLE2")
+DYNAMODB_TABLE3 = os.getenv("DYNAMODB_TABLE3")
 
 # Create DynamoDB resource
 dynamodb = boto3.resource(
@@ -22,3 +23,5 @@ dynamodb = boto3.resource(
 table = dynamodb.Table(DYNAMODB_TABLE)
 
 table1 =dynamodb.Table(DYNAMODB_TABLE2)
+
+table2 = dynamodb.Table(DYNAMODB_TABLE3)
