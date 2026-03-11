@@ -3,25 +3,34 @@ from fastapi import APIRouter, File, Query, UploadFile
 from app.challenge_schemas import (
     CreateChallengeRequest,
     CreateChallengeResponse,
+    UpdateChallengeRequest,
+    UpdateChallengeResponse,
+    BulkDeleteRequest,
+    BulkDeleteResponse,
     ChallengeDetailResponse,
     ChallengeListResponse,
     ChallengeSubmitRequest,
     ChallengeSubmitResponse,
-    RunCodeRequest,
-    RunCodeResponse,
+    SubmissionDetailResponse,
+    RunTestsRequest,
+    RunTestsResponse,
     ScoreboardResponse,
     UserSubmissionListResponse,
 )
 from app.services.challenge_service import (
     bulk_create_challenges_from_csv,
+    bulk_delete_challenges,
     create_challenge,
+    delete_challenge,
     get_challenge,
     get_languages,
     get_scoreboard,
+    get_submission_detail,
     list_challenges,
     list_user_submissions,
-    run_code,
+    run_visible_tests,
     submit_challenge,
+    update_challenge,
 )
 
 
@@ -40,6 +49,7 @@ def list_challenges_endpoint(
     tag: str | None = None,
     keyword: str | None = None,
     created_by: str | None = None,
+    user_id: str | None = Query(None, alias="userId"),
     page_size: int = Query(10, ge=1, le=100),
     start_key: str | None = None,
 ):
@@ -49,6 +59,7 @@ def list_challenges_endpoint(
         tag=tag,
         keyword=keyword,
         created_by=created_by,
+        user_id=user_id,
         page_size=page_size,
         start_key=start_key,
     )
@@ -60,8 +71,23 @@ def list_languages_endpoint():
 
 
 @router.get("/{challenge_id}", response_model=ChallengeDetailResponse)
-def get_challenge_endpoint(challenge_id: str):
-    return get_challenge(challenge_id)
+def get_challenge_endpoint(challenge_id: str, user_id: str | None = Query(None, alias="userId")):
+    return get_challenge(challenge_id, user_id=user_id)
+
+
+@router.put("/{challenge_id}", response_model=UpdateChallengeResponse)
+def update_challenge_endpoint(challenge_id: str, request: UpdateChallengeRequest):
+    return update_challenge(challenge_id, request.dict(exclude_unset=True))
+
+
+@router.delete("/{challenge_id}")
+def delete_challenge_endpoint(challenge_id: str):
+    return delete_challenge(challenge_id)
+
+
+@router.post("/bulk-delete", response_model=BulkDeleteResponse)
+def bulk_delete_challenges_endpoint(request: BulkDeleteRequest):
+    return bulk_delete_challenges(request.challenge_ids)
 
 
 @router.post("/{challenge_id}/submit", response_model=ChallengeSubmitResponse)
@@ -69,10 +95,14 @@ def submit_challenge_endpoint(challenge_id: str, request: ChallengeSubmitRequest
     return submit_challenge(challenge_id, request.dict())
 
 
-@router.post("/{challenge_id}/run", response_model=RunCodeResponse)
-def run_code_endpoint(challenge_id: str, request: RunCodeRequest):
-    _ = challenge_id
-    return run_code(request.language_id, request.source_code, request.stdin)
+@router.post("/{challenge_id}/run", response_model=RunTestsResponse)
+def run_code_endpoint(challenge_id: str, request: RunTestsRequest):
+    return run_visible_tests(challenge_id, request.language_id, request.source_code)
+
+
+@router.post("/{challenge_id}/run-tests", response_model=RunTestsResponse)
+def run_tests_endpoint(challenge_id: str, request: RunTestsRequest):
+    return run_visible_tests(challenge_id, request.language_id, request.source_code)
 
 
 @router.get("/{challenge_id}/scoreboard", response_model=ScoreboardResponse)
@@ -93,6 +123,11 @@ def user_submissions_endpoint(
         page_size=page_size,
         start_key=start_key,
     )
+
+
+@router.get("/submissions/{submission_id}", response_model=SubmissionDetailResponse)
+def get_submission_endpoint(submission_id: str):
+    return get_submission_detail(submission_id)
 
 
 @router.post("/upload")

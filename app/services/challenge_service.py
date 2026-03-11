@@ -14,6 +14,7 @@ from app.dynamo import table2
 
 
 JUDGE0_BASE_URL = os.getenv("JUDGE0_BASE_URL")
+JUDGE0_API_KEY = os.getenv("JUDGE0_API_KEY")
 
 
 def _now_ts() -> int:
@@ -28,16 +29,21 @@ def _normalize_output(value: Optional[str]) -> str:
 
 def _post_judge0(payload: Dict[str, Any]) -> Dict[str, Any]:
     url = f"{JUDGE0_BASE_URL}/submissions?base64_encoded=false&wait=true"
+    headers = {"Content-Type": "application/json"}
+    
     try:
-        response = httpx.post(url, json=payload, timeout=20)
+        response = httpx.post(url, json=payload, headers=headers, timeout=20)
     except httpx.RequestError as exc:
         raise HTTPException(status_code=502, detail=f"Judge0 request failed: {exc}")
 
     if response.status_code >= 400:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Judge0 error: {response.status_code} {response.text}"
-        )
+        error_detail = f"Judge0 error: {response.status_code}"
+        try:
+            error_body = response.json()
+            error_detail += f" - {error_body}"
+        except:
+            error_detail += f" - {response.text}"
+        raise HTTPException(status_code=502, detail=error_detail)
 
     return response.json()
 
@@ -72,7 +78,20 @@ def get_languages() -> List[Dict[str, Any]]:
             detail=f"Judge0 error: {response.status_code} {response.text}"
         )
 
-    return response.json()
+    languages = response.json()
+
+    allowed = ["java", "python", "javascript", "c"]
+    filtered = []
+
+    for lang in languages:
+        name = (lang.get("name") or "").strip().lower()
+        # Check if any allowed keyword appears in the language name
+        for keyword in allowed:
+            if keyword in name:
+                filtered.append(lang)
+                break  # Only add once even if multiple keywords match
+
+    return filtered
 
 
 def create_challenge(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -89,14 +108,45 @@ def create_challenge(payload: Dict[str, Any]) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="title and description are required")
 
     if challenge_type == "aptitude":
-        question = (payload.get("question") or "").strip()
-        options = payload.get("options") or []
-        correct_answer = (payload.get("correct_answer") or "").strip()
-        if not question or not options or not correct_answer:
-            raise HTTPException(
-                status_code=400,
-                detail="question, options, and correct_answer are required for aptitude"
-            )
+        sections = payload.get("sections") or []
+        if sections:
+            total_points = 0
+            for section in sections:
+                section_name = (section.get("name") or "").strip()
+                questions = section.get("questions") or []
+                if not section_name or not questions:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Each section must have a name and at least one question"
+                    )
+                for question in questions:
+                    text = (question.get("text") or "").strip()
+                    options = question.get("options") or []
+                    correct_answers = question.get("correct_answers") or []
+                    points = question.get("points")
+                    if not text or not options or not correct_answers:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Each question must have text, options, and correct_answers"
+                        )
+                    if points is None:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Each question must have points"
+                        )
+                    total_points += int(points)
+
+            if total_points > 0:
+                payload["points"] = total_points
+        else:
+            question = (payload.get("question") or "").strip()
+            options = payload.get("options") or []
+            correct_answer = (payload.get("correct_answer") or "").strip()
+            if not question or not options or not correct_answer:
+                raise HTTPException(
+                    status_code=400,
+                    detail="question, options, and correct_answer are required for aptitude"
+                )
 
     if challenge_type == "coding":
         test_cases = payload.get("test_cases") or []
@@ -105,6 +155,10 @@ def create_challenge(payload: Dict[str, Any]) -> Dict[str, Any]:
                 status_code=400,
                 detail="test_cases are required for coding"
             )
+        # Auto-calculate total points from test cases
+        total_points = sum(case.get("points", 0) for case in test_cases)
+        if total_points > 0:
+            payload["points"] = total_points
 
     metadata_item = {
         "PK": f"CHALLENGE#{challenge_id}",
@@ -120,10 +174,12 @@ def create_challenge(payload: Dict[str, Any]) -> Dict[str, Any]:
         "created_at": now,
         "updated_at": now,
         "status": "ACTIVE",
+        "time_limit_minutes": payload.get("time_limit_minutes"),
         "question": payload.get("question"),
         "options": payload.get("options"),
         "correct_answer": payload.get("correct_answer"),
         "answer_explanation": payload.get("answer_explanation"),
+        "sections": payload.get("sections"),
         "default_code": payload.get("default_code"),
         "sample_input": payload.get("sample_input"),
         "sample_input_explanation": payload.get("sample_input_explanation"),
@@ -155,6 +211,232 @@ def create_challenge(payload: Dict[str, Any]) -> Dict[str, Any]:
         "challenge_id": challenge_id,
         "status": "CREATED",
         "created_at": now,
+    }
+
+
+def update_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    response = table2.get_item(
+        Key={
+            "PK": f"CHALLENGE#{challenge_id}",
+            "SK": "METADATA",
+        }
+    )
+
+    item = response.get("Item")
+    if not item:
+        raise HTTPException(status_code=404, detail="Challenge not found")
+
+    now = _now_ts()
+    update_expr_parts = ["updated_at = :updated"]
+    expr_values = {":updated": now}
+    expr_names = {}
+
+    if "title" in payload and payload["title"]:
+        update_expr_parts.append("title = :title")
+        expr_values[":title"] = payload["title"].strip()
+
+    if "description" in payload and payload["description"]:
+        update_expr_parts.append("description = :description")
+        expr_values[":description"] = payload["description"].strip()
+
+    if "difficulty" in payload and payload["difficulty"]:
+        update_expr_parts.append("difficulty = :difficulty")
+        expr_values[":difficulty"] = payload["difficulty"]
+
+    if "points" in payload and payload["points"] is not None:
+        update_expr_parts.append("points = :points")
+        expr_values[":points"] = int(payload["points"])
+
+    if "tags" in payload:
+        update_expr_parts.append("tags = :tags")
+        expr_values[":tags"] = payload["tags"] or []
+
+    if "question" in payload:
+        update_expr_parts.append("question = :question")
+        expr_values[":question"] = payload["question"]
+
+    if "options" in payload:
+        update_expr_parts.append("#opts = :options")
+        expr_values[":options"] = payload["options"]
+        expr_names["#opts"] = "options"
+
+    if "correct_answer" in payload:
+        update_expr_parts.append("correct_answer = :correct_answer")
+        expr_values[":correct_answer"] = payload["correct_answer"]
+
+    if "answer_explanation" in payload:
+        update_expr_parts.append("answer_explanation = :answer_explanation")
+        expr_values[":answer_explanation"] = payload["answer_explanation"]
+
+    if "default_code" in payload:
+        update_expr_parts.append("default_code = :default_code")
+        expr_values[":default_code"] = payload["default_code"]
+
+    if "sample_input" in payload:
+        update_expr_parts.append("sample_input = :sample_input")
+        expr_values[":sample_input"] = payload["sample_input"]
+
+    if "sample_input_explanation" in payload:
+        update_expr_parts.append("sample_input_explanation = :sample_input_explanation")
+        expr_values[":sample_input_explanation"] = payload["sample_input_explanation"]
+
+    if "sample_output" in payload:
+        update_expr_parts.append("sample_output = :sample_output")
+        expr_values[":sample_output"] = payload["sample_output"]
+
+    if "sample_output_explanation" in payload:
+        update_expr_parts.append("sample_output_explanation = :sample_output_explanation")
+        expr_values[":sample_output_explanation"] = payload["sample_output_explanation"]
+
+    if "hints" in payload:
+        update_expr_parts.append("hints = :hints")
+        expr_values[":hints"] = payload["hints"]
+
+    if "test_cases" in payload:
+        update_expr_parts.append("test_cases = :test_cases")
+        expr_values[":test_cases"] = payload["test_cases"]
+
+    update_args: Dict[str, Any] = {
+        "Key": {
+            "PK": f"CHALLENGE#{challenge_id}",
+            "SK": "METADATA",
+        },
+        "UpdateExpression": "SET " + ", ".join(update_expr_parts),
+        "ExpressionAttributeValues": expr_values,
+    }
+    if expr_names:
+        update_args["ExpressionAttributeNames"] = expr_names
+
+    table2.update_item(**update_args)
+
+    if "title" in payload or "difficulty" in payload or "points" in payload or "tags" in payload:
+        list_update_parts = []
+        list_values = {}
+        list_names = {}
+
+        if "title" in payload and payload["title"]:
+            list_update_parts.append("title = :title")
+            list_values[":title"] = payload["title"].strip()
+
+        if "difficulty" in payload and payload["difficulty"]:
+            list_update_parts.append("difficulty = :difficulty")
+            list_values[":difficulty"] = payload["difficulty"]
+
+        if "points" in payload and payload["points"] is not None:
+            list_update_parts.append("points = :points")
+            list_values[":points"] = int(payload["points"])
+
+        if "tags" in payload:
+            list_update_parts.append("tags = :tags")
+            list_values[":tags"] = payload["tags"] or []
+
+        if list_update_parts:
+            list_update_args: Dict[str, Any] = {
+                "Key": {
+                    "PK": "CHALLENGE_LIST",
+                    "SK": f"CHALLENGE#{challenge_id}",
+                },
+                "UpdateExpression": "SET " + ", ".join(list_update_parts),
+                "ExpressionAttributeValues": list_values,
+            }
+            if list_names:
+                list_update_args["ExpressionAttributeNames"] = list_names
+
+            table2.update_item(**list_update_args)
+
+    return {
+        "challenge_id": challenge_id,
+        "status": "UPDATED",
+        "updated_at": now,
+    }
+
+
+def delete_challenge(challenge_id: str) -> Dict[str, Any]:
+    response = table2.get_item(
+        Key={
+            "PK": f"CHALLENGE#{challenge_id}",
+            "SK": "METADATA",
+        }
+    )
+
+    item = response.get("Item")
+    if not item:
+        raise HTTPException(status_code=404, detail="Challenge not found")
+
+    table2.delete_item(
+        Key={
+            "PK": f"CHALLENGE#{challenge_id}",
+            "SK": "METADATA",
+        }
+    )
+
+    table2.delete_item(
+        Key={
+            "PK": "CHALLENGE_LIST",
+            "SK": f"CHALLENGE#{challenge_id}",
+        }
+    )
+
+    return {
+        "challenge_id": challenge_id,
+        "status": "DELETED",
+    }
+
+
+def bulk_delete_challenges(challenge_ids: List[str]) -> Dict[str, Any]:
+    deleted_ids = []
+    failed_ids = []
+    errors = []
+
+    for challenge_id in challenge_ids:
+        try:
+            # Check if challenge exists
+            response = table2.get_item(
+                Key={
+                    "PK": f"CHALLENGE#{challenge_id}",
+                    "SK": "METADATA",
+                }
+            )
+
+            if not response.get("Item"):
+                failed_ids.append(challenge_id)
+                errors.append({
+                    "challenge_id": challenge_id,
+                    "error": "Challenge not found"
+                })
+                continue
+
+            # Delete metadata
+            table2.delete_item(
+                Key={
+                    "PK": f"CHALLENGE#{challenge_id}",
+                    "SK": "METADATA",
+                }
+            )
+
+            # Delete from list
+            table2.delete_item(
+                Key={
+                    "PK": "CHALLENGE_LIST",
+                    "SK": f"CHALLENGE#{challenge_id}",
+                }
+            )
+
+            deleted_ids.append(challenge_id)
+
+        except Exception as e:
+            failed_ids.append(challenge_id)
+            errors.append({
+                "challenge_id": challenge_id,
+                "error": str(e)
+            })
+
+    return {
+        "deleted_count": len(deleted_ids),
+        "failed_count": len(failed_ids),
+        "deleted_ids": deleted_ids,
+        "failed_ids": failed_ids,
+        "errors": errors if errors else None,
     }
 
 
@@ -191,12 +473,45 @@ def _matches_keyword(item: Dict[str, Any], keyword: str) -> bool:
     return keyword in title or keyword in tags_text
 
 
+def _get_user_solved_challenges(user_id: str) -> Dict[str, Dict[str, Any]]:
+    solved = {}  # challenge_id -> {score, time_taken_seconds} mapping
+    last_key: Optional[Dict[str, Any]] = None
+
+    while True:
+        query_args: Dict[str, Any] = {
+            "KeyConditionExpression": Key("PK").eq(f"USER#{user_id}"),
+            "ScanIndexForward": False,
+        }
+        if last_key:
+            query_args["ExclusiveStartKey"] = last_key
+
+        response = table2.query(**query_args)
+        items = response.get("Items", [])
+
+        for item in items:
+            challenge_id = item.get("challenge_id")
+            if challenge_id:
+                score = item.get("score", 0)
+                time_taken = item.get("time_taken_seconds")
+                solved[challenge_id] = {
+                    "score": score,
+                    "time_taken_seconds": time_taken
+                }
+
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+
+    return solved
+
+
 def list_challenges(
     challenge_type: Optional[str] = None,
     difficulty: Optional[str] = None,
     tag: Optional[str] = None,
     keyword: Optional[str] = None,
     created_by: Optional[str] = None,
+    user_id: Optional[str] = None,
     page_size: int = 10,
     start_key: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -214,6 +529,7 @@ def list_challenges(
     items: List[Dict[str, Any]] = []
     last_key = decoded_key
     keyword_value = (keyword or "").strip().lower()
+    solved_dict = _get_user_solved_challenges(user_id) if user_id else {}
 
     while len(items) < page_size:
         query_args: Dict[str, Any] = {
@@ -238,25 +554,33 @@ def list_challenges(
         if not last_key:
             break
 
+    challenges_list = []
+    for item in items:
+        challenge_id = item.get("challenge_id")
+        user_data = solved_dict.get(challenge_id) if user_id and challenge_id in solved_dict else None
+        challenge_data = {
+            "challenge_id": challenge_id,
+            "title": item.get("title"),
+            "challenge_type": item.get("challenge_type"),
+            "difficulty": item.get("difficulty"),
+            "points": item.get("points", 0),
+            "tags": item.get("tags", []),
+            "created_by": item.get("created_by"),
+            "created_at": item.get("created_at", 0),
+            "solved": challenge_id in solved_dict if user_id else None,
+            "user_score": user_data.get("score") if user_data else None,
+            "time_taken_seconds": user_data.get("time_taken_seconds") if user_data else None,
+        }
+        challenges_list.append(challenge_data)
+
     return {
-        "challenges": [
-            {
-                "challenge_id": item.get("challenge_id"),
-                "title": item.get("title"),
-                "challenge_type": item.get("challenge_type"),
-                "difficulty": item.get("difficulty"),
-                "points": item.get("points", 0),
-                "tags": item.get("tags", []),
-                "created_by": item.get("created_by"),
-                "created_at": item.get("created_at", 0),
-            }
-            for item in items
-        ],
+        "challenges": challenges_list,
         "next_key": _encode_key(last_key),
+        "total_solved": len(solved_dict) if user_id else None,
     }
 
 
-def get_challenge(challenge_id: str) -> Dict[str, Any]:
+def get_challenge(challenge_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
     response = table2.get_item(
         Key={
             "PK": f"CHALLENGE#{challenge_id}",
@@ -269,6 +593,17 @@ def get_challenge(challenge_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Challenge not found")
 
     test_cases = item.get("test_cases") or []
+    visible_cases = [case for case in test_cases if not case.get("is_hidden")]
+    hidden_cases = [case for case in test_cases if case.get("is_hidden")]
+    solved = None
+    if user_id:
+        solved_check = table2.get_item(
+            Key={
+                "PK": f"USER#{user_id}",
+                "SK": f"SUBMISSION#{challenge_id}",
+            }
+        )
+        solved = bool(solved_check.get("Item"))
 
     return {
         "challenge_id": challenge_id,
@@ -280,9 +615,12 @@ def get_challenge(challenge_id: str) -> Dict[str, Any]:
         "tags": item.get("tags", []),
         "created_by": item.get("created_by"),
         "created_at": item.get("created_at", 0),
+        "solved": solved,
+        "time_limit_minutes": item.get("time_limit_minutes"),
         "question": item.get("question"),
         "options": item.get("options"),
         "answer_explanation": item.get("answer_explanation"),
+        "sections": item.get("sections"),
         "default_code": item.get("default_code"),
         "sample_input": item.get("sample_input"),
         "sample_input_explanation": item.get("sample_input_explanation"),
@@ -290,6 +628,8 @@ def get_challenge(challenge_id: str) -> Dict[str, Any]:
         "sample_output_explanation": item.get("sample_output_explanation"),
         "hints": item.get("hints"),
         "test_cases_count": len(test_cases),
+        "visible_test_cases": visible_cases,
+        "hidden_test_cases": hidden_cases,
     }
 
 
@@ -312,6 +652,83 @@ def run_code(language_id: int, source_code: str, stdin: Optional[str]) -> Dict[s
     }
 
 
+def run_visible_tests(challenge_id: str, language_id: int, source_code: str) -> Dict[str, Any]:
+    response = table2.get_item(
+        Key={
+            "PK": f"CHALLENGE#{challenge_id}",
+            "SK": "METADATA",
+        }
+    )
+
+    item = response.get("Item")
+    if not item:
+        raise HTTPException(status_code=404, detail="Challenge not found")
+
+    test_cases = item.get("test_cases") or []
+    
+    compile_output = None
+
+    results: List[Dict[str, Any]] = []
+    passed_count = 0
+    earned_score = 0
+
+    for index, case in enumerate(test_cases, start=1):
+        is_hidden = bool(case.get("is_hidden"))
+        test_case_points = int(case.get("points", 0))
+        
+        payload = {
+            "language_id": int(language_id),
+            "source_code": source_code,
+            "stdin": case.get("input", ""),
+            "expected_output": case.get("expected_output", ""),
+        }
+
+        judge_result = _post_judge0(payload)
+        stdout = _normalize_output(judge_result.get("stdout"))
+        expected = _normalize_output(case.get("expected_output"))
+        status_desc = judge_result.get("status", {}).get("description", "UNKNOWN")
+        is_passed = stdout == expected and status_desc == "Accepted"
+        
+        if not compile_output and judge_result.get("compile_output"):
+            compile_output = judge_result.get("compile_output")
+
+        if is_passed:
+            passed_count += 1
+            earned_score += test_case_points
+
+        result_item = {
+            "index": index,
+            "status": status_desc,
+            "passed": is_passed,
+            "points": test_case_points,
+            "earned_points": test_case_points if is_passed else 0,
+            "stdout": judge_result.get("stdout"),
+            "stderr": judge_result.get("stderr"),
+            "compile_output": judge_result.get("compile_output"),
+            "time": judge_result.get("time"),
+            "memory": judge_result.get("memory"),
+            "is_hidden": is_hidden,
+        }
+        
+        if not is_hidden:
+            result_item["input"] = case.get("input")
+            result_item["expected_output"] = case.get("expected_output")
+        
+        results.append(result_item)
+
+    total_points = sum(case.get("points", 0) for case in test_cases)
+
+    return {
+        "status": "COMPLETED",
+        "passed_count": passed_count,
+        "total_count": len(test_cases),
+        "score": earned_score,
+        "total_points": total_points,
+        "compile_output": compile_output,
+        "results": results,
+    }
+
+
 def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     response = table2.get_item(
         Key={
@@ -329,10 +746,135 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
     if not user_id:
         raise HTTPException(status_code=400, detail="user_id is required")
 
-    submission_id = f"sub_{uuid.uuid4()}"
+    submission_id = f"{challenge_id}#{user_id}"
     now = _now_ts()
+    
+    # Check if submission already exists
+    existing_submission = table2.get_item(
+        Key={
+            "PK": f"SUBMISSION#{submission_id}",
+            "SK": "DETAIL",
+        }
+    )
+    is_update = bool(existing_submission.get("Item"))
 
     if challenge_type == "aptitude":
+        sections = item.get("sections") or []
+        if sections:
+            section_answers = payload.get("section_answers") or []
+            if not section_answers:
+                raise HTTPException(
+                    status_code=400,
+                    detail="section_answers are required for aptitude sections"
+                )
+
+            answers_by_section = {
+                int(section.get("section_index")): section.get("question_answers") or []
+                for section in section_answers
+                if section.get("section_index") is not None
+            }
+
+            results = []
+            total_questions = 0
+            correct_count = 0
+            score = 0
+
+            for section_index, section in enumerate(sections):
+                questions = section.get("questions") or []
+                total_questions += len(questions)
+                question_answers = answers_by_section.get(section_index, [])
+                answers_by_question = {
+                    int(answer.get("question_index")): answer.get("selected_answers") or []
+                    for answer in question_answers
+                    if answer.get("question_index") is not None
+                }
+
+                for question_index, question in enumerate(questions):
+                    correct_answers = question.get("correct_answers") or []
+                    selected_answers = answers_by_question.get(question_index, [])
+
+                    normalized_correct = {str(value).strip() for value in correct_answers}
+                    normalized_selected = {str(value).strip() for value in selected_answers}
+
+                    is_correct = normalized_selected == normalized_correct
+                    points = int(question.get("points", 0))
+                    earned_points = points if is_correct else 0
+
+                    if is_correct:
+                        correct_count += 1
+                        score += points
+
+                    results.append({
+                        "section_index": section_index,
+                        "question_index": question_index,
+                        "is_correct": is_correct,
+                        "points": points,
+                        "earned_points": earned_points,
+                        "selected_answers": selected_answers,
+                    })
+
+            submission_item = {
+                "PK": f"CHALLENGE#{challenge_id}",
+                "SK": f"SUBMISSION#{user_id}",
+                "submission_id": submission_id,
+                "challenge_id": challenge_id,
+                "challenge_type": challenge_type,
+                "user_id": user_id,
+                "section_answers": section_answers,
+                "time_taken_seconds": payload.get("time_taken_seconds"),
+                "score": int(score),
+                "passed_count": correct_count,
+                "total_count": total_questions,
+                "results": results,
+                "created_at": now,
+            }
+
+            table2.put_item(Item=submission_item)
+
+            user_item = {
+                "PK": f"USER#{user_id}",
+                "SK": f"SUBMISSION#{challenge_id}",
+                "submission_id": submission_id,
+                "challenge_id": challenge_id,
+                "challenge_title": item.get("title"),
+                "challenge_type": challenge_type,
+                "score": int(score),
+                "passed_count": correct_count,
+                "total_count": total_questions,
+                "time_taken_seconds": payload.get("time_taken_seconds"),
+                "created_at": now,
+            }
+            table2.put_item(Item=user_item)
+
+            detail_item = {
+                "PK": f"SUBMISSION#{submission_id}",
+                "SK": "DETAIL",
+                "submission_id": submission_id,
+                "challenge_id": challenge_id,
+                "challenge_title": item.get("title"),
+                "challenge_type": challenge_type,
+                "user_id": user_id,
+                "section_answers": section_answers,
+                "time_taken_seconds": payload.get("time_taken_seconds"),
+                "score": int(score),
+                "passed_count": correct_count,
+                "total_count": total_questions,
+                "results": results,
+                "created_at": now,
+            }
+            table2.put_item(Item=detail_item)
+
+            return {
+                "submission_id": submission_id,
+                "challenge_id": challenge_id,
+                "status": "COMPLETED",
+                "score": int(score),
+                "passed_count": correct_count,
+                "total_count": total_questions,
+                "results": results,
+                "time_taken_seconds": payload.get("time_taken_seconds"),
+            }
+
         selected = (payload.get("selected_answer") or "").strip()
         correct = (item.get("correct_answer") or "").strip()
         is_correct = selected == correct
@@ -340,7 +882,7 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
 
         submission_item = {
             "PK": f"CHALLENGE#{challenge_id}",
-            "SK": f"SUBMISSION#{now}#{user_id}",
+            "SK": f"SUBMISSION#{user_id}",
             "submission_id": submission_id,
             "challenge_id": challenge_id,
             "challenge_type": challenge_type,
@@ -348,6 +890,7 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
             "selected_answer": selected,
             "is_correct": is_correct,
             "score": int(score),
+            "time_taken_seconds": payload.get("time_taken_seconds"),
             "created_at": now,
         }
 
@@ -355,7 +898,7 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
 
         user_item = {
             "PK": f"USER#{user_id}",
-            "SK": f"SUBMISSION#{now}#{challenge_id}",
+            "SK": f"SUBMISSION#{challenge_id}",
             "submission_id": submission_id,
             "challenge_id": challenge_id,
             "challenge_title": item.get("title"),
@@ -363,9 +906,26 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
             "score": int(score),
             "selected_answer": selected,
             "is_correct": is_correct,
+            "time_taken_seconds": payload.get("time_taken_seconds"),
             "created_at": now,
         }
         table2.put_item(Item=user_item)
+
+        detail_item = {
+            "PK": f"SUBMISSION#{submission_id}",
+            "SK": "DETAIL",
+            "submission_id": submission_id,
+            "challenge_id": challenge_id,
+            "challenge_title": item.get("title"),
+            "challenge_type": challenge_type,
+            "user_id": user_id,
+            "selected_answer": selected,
+            "is_correct": is_correct,
+            "score": int(score),
+            "time_taken_seconds": payload.get("time_taken_seconds"),
+            "created_at": now,
+        }
+        table2.put_item(Item=detail_item)
 
         return {
             "submission_id": submission_id,
@@ -380,6 +940,7 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
                     "selected_answer": selected,
                 }
             ],
+            "time_taken_seconds": payload.get("time_taken_seconds"),
         }
 
     if challenge_type != "coding":
@@ -399,6 +960,7 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
 
     results: List[Dict[str, Any]] = []
     passed_count = 0
+    earned_score = 0
 
     for index, case in enumerate(test_cases, start=1):
         payload = {
@@ -413,14 +975,18 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
         expected = _normalize_output(case.get("expected_output"))
         status_desc = judge_result.get("status", {}).get("description", "UNKNOWN")
         is_passed = stdout == expected and status_desc == "Accepted"
+        test_case_points = int(case.get("points", 0))
 
         if is_passed:
             passed_count += 1
+            earned_score += test_case_points
 
         result_item = {
             "index": index,
             "status": status_desc,
             "passed": is_passed,
+            "points": test_case_points,
+            "earned_points": test_case_points if is_passed else 0,
             "stdout": judge_result.get("stdout"),
             "stderr": judge_result.get("stderr"),
             "compile_output": judge_result.get("compile_output"),
@@ -436,12 +1002,11 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
         results.append(result_item)
 
     total_count = len(test_cases)
-    points = int(item.get("points", 0))
-    score = int(points * (passed_count / total_count)) if total_count else 0
+    score = earned_score
 
     submission_item = {
         "PK": f"CHALLENGE#{challenge_id}",
-        "SK": f"SUBMISSION#{now}#{user_id}",
+        "SK": f"SUBMISSION#{user_id}",
         "submission_id": submission_id,
         "challenge_id": challenge_id,
         "challenge_type": challenge_type,
@@ -459,7 +1024,7 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
 
     user_item = {
         "PK": f"USER#{user_id}",
-        "SK": f"SUBMISSION#{now}#{challenge_id}",
+        "SK": f"SUBMISSION#{challenge_id}",
         "submission_id": submission_id,
         "challenge_id": challenge_id,
         "challenge_title": item.get("title"),
@@ -472,6 +1037,24 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
     }
     table2.put_item(Item=user_item)
 
+    detail_item = {
+        "PK": f"SUBMISSION#{submission_id}",
+        "SK": "DETAIL",
+        "submission_id": submission_id,
+        "challenge_id": challenge_id,
+        "challenge_title": item.get("title"),
+        "challenge_type": challenge_type,
+        "user_id": user_id,
+        "language_id": int(language_id),
+        "source_code": source_code,
+        "score": score,
+        "passed_count": passed_count,
+        "total_count": total_count,
+        "results": results,
+        "created_at": now,
+    }
+    table2.put_item(Item=detail_item)
+
     return {
         "submission_id": submission_id,
         "challenge_id": challenge_id,
@@ -480,6 +1063,38 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
         "passed_count": passed_count,
         "total_count": total_count,
         "results": results,
+    }
+
+
+def get_submission_detail(submission_id: str) -> Dict[str, Any]:
+    response = table2.get_item(
+        Key={
+            "PK": f"SUBMISSION#{submission_id}",
+            "SK": "DETAIL",
+        }
+    )
+
+    item = response.get("Item")
+    if not item:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    return {
+        "submission_id": submission_id,
+        "challenge_id": item.get("challenge_id"),
+        "challenge_title": item.get("challenge_title"),
+        "challenge_type": item.get("challenge_type"),
+        "user_id": item.get("user_id"),
+        "score": int(item.get("score", 0)),
+        "created_at": int(item.get("created_at", 0)),
+        "selected_answer": item.get("selected_answer"),
+        "is_correct": item.get("is_correct"),
+        "section_answers": item.get("section_answers"),
+        "time_taken_seconds": item.get("time_taken_seconds"),
+        "language_id": item.get("language_id"),
+        "source_code": item.get("source_code"),
+        "passed_count": item.get("passed_count"),
+        "total_count": item.get("total_count"),
+        "results": item.get("results"),
     }
 
 
@@ -574,6 +1189,7 @@ def list_user_submissions(
                 "language_id": item.get("language_id"),
                 "selected_answer": item.get("selected_answer"),
                 "is_correct": item.get("is_correct"),
+                "time_taken_seconds": item.get("time_taken_seconds"),
                 "created_at": int(item.get("created_at", 0)),
             }
             for item in items
