@@ -9,6 +9,8 @@ from app.schemas import (
     InterviewStartRequest,
     InterviewStartResponse,
     InterviewAnswerSubmission,
+    InterviewQuotaCheckRequest,
+    InterviewQuotaCheckResponse,
 )
 
 from app.services.question_service import generate_questions
@@ -16,9 +18,144 @@ from app.services.behavior_service import generate_behavior_feedback
 from app.services.technical_evaluation_service import evaluate_all_answers
 from app.utils import convert_floats
 from datetime import datetime, timezone
+import calendar
 
 
 router = APIRouter()
+
+
+def _parse_plan_start(plan_start: str) -> datetime:
+    raw = str(plan_start or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="planStartDate is required")
+
+    # Accept ISO date (YYYY-MM-DD) or datetime.
+    try:
+        if len(raw) == 10:
+            parsed = datetime.strptime(raw, "%Y-%m-%d")
+            return parsed.replace(tzinfo=timezone.utc)
+        normalized = raw.replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(normalized)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="planStartDate must be ISO format (YYYY-MM-DD or ISO datetime)",
+        )
+
+
+def _month_shift(year: int, month: int, delta: int) -> tuple[int, int]:
+    month_index = (year * 12 + (month - 1)) + delta
+    return month_index // 12, (month_index % 12) + 1
+
+
+def _anchor_for_month(year: int, month: int, anchor_day: int) -> datetime:
+    last_day = calendar.monthrange(year, month)[1]
+    day = min(anchor_day, last_day)
+    return datetime(year, month, day, tzinfo=timezone.utc)
+
+
+def _resolve_cycle_window(plan_start_dt: datetime, now_dt: datetime) -> tuple[datetime, datetime]:
+    anchor_day = plan_start_dt.day
+    current_anchor = _anchor_for_month(now_dt.year, now_dt.month, anchor_day)
+
+    if now_dt >= current_anchor:
+        cycle_start = current_anchor
+    else:
+        prev_year, prev_month = _month_shift(now_dt.year, now_dt.month, -1)
+        cycle_start = _anchor_for_month(prev_year, prev_month, anchor_day)
+
+    next_year, next_month = _month_shift(cycle_start.year, cycle_start.month, 1)
+    cycle_end = _anchor_for_month(next_year, next_month, anchor_day)
+    return cycle_start, cycle_end
+
+
+def _quota_period_key(cycle_start: datetime) -> str:
+    return cycle_start.strftime("%Y-%m-%d")
+
+
+def _to_int(value, default=0) -> int:
+    if value is None:
+        return default
+    if isinstance(value, Decimal):
+        return int(value)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_subscription_status(status: str | None) -> str:
+    return str(status or "ACTIVE").strip().upper()
+
+
+def _compute_quota_state(user_id: str, limit: int, cycle_start: datetime):
+    period = _quota_period_key(cycle_start)
+    quota_pk = f"USER#{user_id}"
+    quota_sk = f"INTERVIEW_QUOTA#{period}"
+
+    existing = table.get_item(Key={"PK": quota_pk, "SK": quota_sk}).get("Item")
+    used_count = _to_int(existing.get("used_interviews"), 0) if existing else 0
+    remaining = max(0, limit - used_count)
+
+    return {
+        "period": period,
+        "quota_pk": quota_pk,
+        "quota_sk": quota_sk,
+        "existing": existing,
+        "used_count": used_count,
+        "remaining": remaining,
+    }
+
+
+def _persist_quota(
+    user_id: str,
+    plan_type: str,
+    subscription_status: str,
+    interviews_limit: int,
+    used_interviews: int,
+    plan_start_date: str,
+    period: str,
+    cycle_start: str,
+    renews_at: str,
+    now_iso: str,
+):
+    quota_pk = f"USER#{user_id}"
+    quota_sk = f"INTERVIEW_QUOTA#{period}"
+    table.put_item(
+        Item={
+            "PK": quota_pk,
+            "SK": quota_sk,
+            "user_id": user_id,
+            "plan_type": plan_type,
+            "subscription_status": subscription_status,
+            "period": period,
+            "plan_start_date": plan_start_date,
+            "cycle_start": cycle_start,
+            "interviews_limit": interviews_limit,
+            "used_interviews": used_interviews,
+            "remaining_interviews": max(0, interviews_limit - used_interviews),
+            "renews_at": renews_at,
+            "updated_at": now_iso,
+            "entity_type": "INTERVIEW_QUOTA",
+        }
+    )
+
+
+def _store_quota_audit(user_id: str, period: str, event_type: str, payload: dict):
+    ts = int(time.time() * 1000)
+    table.put_item(
+        Item={
+            "PK": f"USER#{user_id}",
+            "SK": f"INTERVIEW_QUOTA#{period}#EVENT#{ts}",
+            "entity_type": "INTERVIEW_QUOTA_EVENT",
+            "event_type": event_type,
+            **payload,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
 
 def _to_decimal(value):
     """
@@ -201,6 +338,192 @@ def get_user_sessions(user_id: str):
     }
 
 
+@router.post("/quota/check", response_model=InterviewQuotaCheckResponse)
+def check_interview_quota(payload: InterviewQuotaCheckRequest):
+    user_id = str(payload.user_id or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+
+    interviews_limit = _to_int(payload.interviewsLimit, default=-1)
+    if interviews_limit < 0:
+        raise HTTPException(status_code=400, detail="interviewsLimit is required and must be >= 0")
+
+    plan_type = str(payload.planType or "UNKNOWN").strip()
+    subscription_status = _normalize_subscription_status(payload.status)
+    plan_start_dt = _parse_plan_start(payload.planStartDate)
+    if subscription_status not in {"ACTIVE", "TRIAL"}:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Subscription is not active (status={subscription_status}).",
+        )
+
+    now_dt = datetime.now(timezone.utc)
+    now_iso = now_dt.isoformat()
+    cycle_start_dt, cycle_end_dt = _resolve_cycle_window(plan_start_dt, now_dt)
+    period = _quota_period_key(cycle_start_dt)
+    state = _compute_quota_state(user_id=user_id, limit=interviews_limit, cycle_start=cycle_start_dt)
+
+    can_start = state["remaining"] > 0
+    message = (
+        "Interview can be started."
+        if can_start
+        else f"Interview limit reached for {plan_type}. Upgrade your subscription plan."
+    )
+
+    _persist_quota(
+        user_id=user_id,
+        plan_type=plan_type,
+        subscription_status=subscription_status,
+        interviews_limit=interviews_limit,
+        used_interviews=state["used_count"],
+        plan_start_date=payload.planStartDate,
+        period=period,
+        cycle_start=cycle_start_dt.isoformat(),
+        renews_at=cycle_end_dt.isoformat(),
+        now_iso=now_iso,
+    )
+
+    _store_quota_audit(
+        user_id=user_id,
+        period=period,
+        event_type="CHECK",
+        payload={
+            "plan_type": plan_type,
+            "subscription_status": subscription_status,
+            "plan_start_date": payload.planStartDate,
+            "cycle_start": cycle_start_dt.isoformat(),
+            "renews_at": cycle_end_dt.isoformat(),
+            "interviews_limit": interviews_limit,
+            "used_interviews": state["used_count"],
+            "remaining_interviews": state["remaining"],
+            "can_start_interview": can_start,
+        },
+    )
+
+    return InterviewQuotaCheckResponse(
+        user_id=user_id,
+        plan_type=plan_type,
+        subscription_status=subscription_status,
+        period=period,
+        cycle_start=cycle_start_dt.isoformat(),
+        renews_at=cycle_end_dt.isoformat(),
+        interviews_limit=interviews_limit,
+        used_interviews=state["used_count"],
+        remaining_interviews=state["remaining"],
+        can_start_interview=can_start,
+        slot_consumed=False,
+        message=message,
+    )
+
+
+@router.post("/quota/consume", response_model=InterviewQuotaCheckResponse)
+def consume_interview_quota(payload: InterviewQuotaCheckRequest):
+    user_id = str(payload.user_id or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+
+    interviews_limit = _to_int(payload.interviewsLimit, default=-1)
+    if interviews_limit < 0:
+        raise HTTPException(status_code=400, detail="interviewsLimit is required and must be >= 0")
+
+    plan_type = str(payload.planType or "UNKNOWN").strip()
+    subscription_status = _normalize_subscription_status(payload.status)
+    plan_start_dt = _parse_plan_start(payload.planStartDate)
+    if subscription_status not in {"ACTIVE", "TRIAL"}:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Subscription is not active (status={subscription_status}).",
+        )
+
+    now_dt = datetime.now(timezone.utc)
+    now_iso = now_dt.isoformat()
+    cycle_start_dt, cycle_end_dt = _resolve_cycle_window(plan_start_dt, now_dt)
+    period = _quota_period_key(cycle_start_dt)
+    state = _compute_quota_state(user_id=user_id, limit=interviews_limit, cycle_start=cycle_start_dt)
+
+    if state["remaining"] <= 0:
+        _persist_quota(
+            user_id=user_id,
+            plan_type=plan_type,
+            subscription_status=subscription_status,
+            interviews_limit=interviews_limit,
+            used_interviews=state["used_count"],
+            plan_start_date=payload.planStartDate,
+            period=period,
+            cycle_start=cycle_start_dt.isoformat(),
+            renews_at=cycle_end_dt.isoformat(),
+            now_iso=now_iso,
+        )
+        _store_quota_audit(
+            user_id=user_id,
+            period=period,
+            event_type="BLOCKED",
+            payload={
+                "plan_type": plan_type,
+                "subscription_status": subscription_status,
+                "plan_start_date": payload.planStartDate,
+                "cycle_start": cycle_start_dt.isoformat(),
+                "renews_at": cycle_end_dt.isoformat(),
+                "interviews_limit": interviews_limit,
+                "used_interviews": state["used_count"],
+                "remaining_interviews": 0,
+                "can_start_interview": False,
+            },
+        )
+        raise HTTPException(
+            status_code=403,
+            detail=f"Interview limit reached for {plan_type}. Upgrade your subscription plan.",
+        )
+
+    updated_used = state["used_count"] + 1
+    remaining = max(0, interviews_limit - updated_used)
+
+    _persist_quota(
+        user_id=user_id,
+        plan_type=plan_type,
+        subscription_status=subscription_status,
+        interviews_limit=interviews_limit,
+        used_interviews=updated_used,
+        plan_start_date=payload.planStartDate,
+        period=period,
+        cycle_start=cycle_start_dt.isoformat(),
+        renews_at=cycle_end_dt.isoformat(),
+        now_iso=now_iso,
+    )
+
+    _store_quota_audit(
+        user_id=user_id,
+        period=period,
+        event_type="CONSUMED",
+        payload={
+            "plan_type": plan_type,
+            "subscription_status": subscription_status,
+            "plan_start_date": payload.planStartDate,
+            "cycle_start": cycle_start_dt.isoformat(),
+            "renews_at": cycle_end_dt.isoformat(),
+            "interviews_limit": interviews_limit,
+            "used_interviews": updated_used,
+            "remaining_interviews": remaining,
+            "can_start_interview": True,
+        },
+    )
+
+    return InterviewQuotaCheckResponse(
+        user_id=user_id,
+        plan_type=plan_type,
+        subscription_status=subscription_status,
+        period=period,
+        cycle_start=cycle_start_dt.isoformat(),
+        renews_at=cycle_end_dt.isoformat(),
+        interviews_limit=interviews_limit,
+        used_interviews=updated_used,
+        remaining_interviews=remaining,
+        can_start_interview=True,
+        slot_consumed=True,
+        message="Interview slot reserved. You can start the interview.",
+    )
+
+
 
 
 # -----------------------------
@@ -261,6 +584,28 @@ def get_full_feedback(session_id: str):
         "detailed_coaching_tips": behavioral.get("detailed_coaching_tips", []),
         "completed_at": feedback_item.get("updated_at")
     }
+
+
+@router.get("/count/{user_id}")
+def get_user_interview_count(user_id: str):
+    from app.schemas import UserInterviewCountResponse
+    
+    response = table.query(
+        IndexName="user-session-index",
+        KeyConditionExpression=Key("user_id").eq(user_id)
+    )
+
+    items = response.get("Items", [])
+    interview_count = 0
+
+    for item in items:
+        if item.get("SK") == "METADATA":
+            interview_count += 1
+
+    return UserInterviewCountResponse(
+        user_id=user_id,
+        interview_count=interview_count
+    )
 
 
 # -----------------------------------------

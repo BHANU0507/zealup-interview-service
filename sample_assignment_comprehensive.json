@@ -1,0 +1,226 @@
+{
+  "title": "Python Programming Fundamentals Assessment",
+  "course_id": "cs101",
+  "course_name": "Introduction to Computer Science",
+  "description": "A comprehensive assessment covering Python basics, data structures, and algorithmic thinking. This assignment tests your understanding of fundamental programming concepts.",
+  "created_by": "instructor_john_doe",
+  "instructor_name": "Dr. John Doe",
+  "time_limit_minutes": 120,
+  "start_date": "2026-03-20T09:00:00",
+  "deadline": "2026-04-15T23:59:59",
+  "is_locked": false,
+  "level": "intermediate",
+  "max_attempts": 3,
+  "tags": ["python", "programming", "fundamentals", "assessment"],
+  "instructions": "Complete all questions within the time limit. You can save your progress and return later. Make sure to test your code before submitting. Good luck!",
+  "questions": [
+    {
+      "id": "q1_coding_fibonacci",
+      "question_type": "coding",
+      "title": "Fibonacci Sequence Implementation",
+      "description": "Write a function that returns the nth Fibonacci number. The Fibonacci sequence starts with 0, 1, and each subsequent number is the sum of the previous two.\n\nFunction signature: fibonacci(n: int) -> int\n\nExamples:\n- fibonacci(0) → 0\n- fibonacci(1) → 1\n- fibonacci(5) → 5\n- fibonacci(10) → 55",
+      "default_code": "def fibonacci(n):\n    \"\"\"\n    Returns the nth Fibonacci number.\n    \n    Args:\n        n (int): Position in Fibonacci sequence (0-indexed)\n    \n    Returns:\n        int: The nth Fibonacci number\n    \"\"\"\n    # Your code here\n    pass\n\n# Test your function\nprint(fibonacci(5))  # Should output: 5",
+      "sample_input": "5",
+      "sample_output": "5",
+      "test_cases": [
+        {
+          "input": "0",
+          "expected_output": "0",
+          "points": 5,
+          "is_hidden": false,
+          "explanation": "Base case: F(0) = 0"
+        },
+        {
+          "input": "1", 
+          "expected_output": "1",
+          "points": 5,
+          "is_hidden": false,
+          "explanation": "Base case: F(1) = 1"
+        },
+        {
+          "input": "5",
+          "expected_output": "5",
+          "points": 10,
+          "is_hidden": false,
+          "explanation": "F(5) = 5 (sequence: 0,1,1,2,3,5)"
+        },
+        {
+          "input": "10",
+          "expected_output": "55",
+          "points": 15,
+          "is_hidden": true,
+          "explanation": "Hidden test: F(10) = 55"
+        }
+      ],
+      "points": 35,
+      "time_limit_minutes": 30,
+      "hints": "Consider using iteration or memoization for efficiency. Recursive solution may be too slow for large numbers."
+    },
+    {
+      "id": "q2_multiple_choice_data_types",
+      "question_type": "multiple_choice",
+      "title": "Python Data Types and Mutability",
+      "description": "Which of the following Python data types are mutable? (Select all that apply)",
+      "options": [
+        {
+          "id": "opt1",
+          "text": "List"
+        },
+        {
+          "id": "opt2",
+          "text": "Tuple"
+        },
+        {
+          "id": "opt3",
+          "text": "Dictionary"
+        },
+        {
+          "id": "opt4",
+          "text": "String"
+        },
+        {
+          "id": "opt5",
+          "text": "Set"
+        },
+        {
+          "id": "opt6",
+          "text": "Integer"
+        }
+      ],
+      "correct_option_ids": ["opt1", "opt3", "opt5"],
+      "points": 20,
+      "explanation": "Mutable data types in Python can be modified after creation. Lists, dictionaries, and sets are mutable. Tuples, strings, and integers are immutable.",
+      "shuffle_options": true
+    },
+    {
+      "id": "q3_fill_blank_syntax",
+      "question_type": "fill_in_blank", 
+      "title": "Python Syntax and Keywords",
+      "description": "Complete the following Python code snippet by filling in the blanks:",
+      "text_with_blanks": "To define a function in Python, you use the _____ keyword. To create a single-line comment, you use the _____ symbol. The _____ statement is used to exit a function and optionally return a value. To import all functions from a module, you use the syntax: from module_name import _____",
+      "correct_answers": [
+        ["def"],
+        ["#", "hash"],
+        ["return"],
+        ["*", "star", "asterisk"]
+      ],
+      "points": 16,
+      "case_sensitive": false,
+      "explanation": "Key Python syntax: 'def' for functions, '#' for comments, 'return' for returning values, '*' for importing all."
+    },
+    {
+      "id": "q4_coding_list_processing",
+      "question_type": "coding",
+      "title": "List Processing and Filtering",
+      "description": "Write a function that takes a list of integers and returns a new list containing only the even numbers, sorted in descending order.\n\nFunction signature: filter_even_desc(numbers: List[int]) -> List[int]\n\nExamples:\n- filter_even_desc([1, 2, 3, 4, 5, 6]) → [6, 4, 2]\n- filter_even_desc([1, 3, 5]) → []\n- filter_even_desc([8, 2, 7, 4, 1]) → [8, 4, 2]",
+      "default_code": "def filter_even_desc(numbers):\n    \"\"\"\n    Filters even numbers and sorts them in descending order.\n    \n    Args:\n        numbers (List[int]): List of integers\n    \n    Returns:\n        List[int]: Even numbers sorted in descending order\n    \"\"\"\n    # Your code here\n    pass\n\n# Test your function\ntest_list = [1, 2, 3, 4, 5, 6]\nprint(filter_even_desc(test_list))  # Should output: [6, 4, 2]",
+      "test_cases": [
+        {
+          "input": "[1, 2, 3, 4, 5, 6]",
+          "expected_output": "[6, 4, 2]",
+          "points": 8,
+          "is_hidden": false,
+          "explanation": "Basic test with mixed odd/even numbers"
+        },
+        {
+          "input": "[1, 3, 5]",
+          "expected_output": "[]",
+          "points": 7,
+          "is_hidden": false,
+          "explanation": "Test with no even numbers"
+        },
+        {
+          "input": "[8, 2, 7, 4, 1]",
+          "expected_output": "[8, 4, 2]", 
+          "points": 10,
+          "is_hidden": true,
+          "explanation": "Hidden test with unsorted input"
+        }
+      ],
+      "points": 25,
+      "time_limit_minutes": 20,
+      "hints": "Use list comprehension or filter() to get even numbers, then sort() with reverse=True."
+    },
+    {
+      "id": "q5_multiple_choice_complexity",
+      "question_type": "multiple_choice",
+      "title": "Algorithm Time Complexity",
+      "description": "What is the time complexity of binary search algorithm on a sorted array of n elements?",
+      "options": [
+        {
+          "id": "opt1",
+          "text": "O(1) - Constant"
+        },
+        {
+          "id": "opt2",
+          "text": "O(log n) - Logarithmic"
+        },
+        {
+          "id": "opt3",
+          "text": "O(n) - Linear"
+        },
+        {
+          "id": "opt4", 
+          "text": "O(n log n) - Linearithmic"
+        },
+        {
+          "id": "opt5",
+          "text": "O(n²) - Quadratic"
+        }
+      ],
+      "correct_option_ids": ["opt2"],
+      "points": 15,
+      "explanation": "Binary search has O(log n) time complexity because it eliminates half of the remaining elements in each iteration, leading to logarithmic behavior.",
+      "shuffle_options": false
+    },
+    {
+      "id": "q6_fill_blank_loops",
+      "question_type": "fill_in_blank",
+      "title": "Python Loop Control",
+      "description": "Complete the code for different types of loops:",
+      "text_with_blanks": "To iterate through a list called 'items', you write: _____ item _____ items. To create a loop that runs 5 times, you can use: for i in _____. To exit a loop early, you use the _____ statement.",
+      "correct_answers": [
+        ["for"],
+        ["in"],
+        ["range(5)", "range(0,5)", "range(0, 5)"],
+        ["break"]
+      ],
+      "points": 12,
+      "case_sensitive": false,
+      "explanation": "Python loop syntax: 'for item in items', 'range()' for numeric loops, 'break' to exit early."
+    },
+    {
+      "id": "q7_coding_advanced",
+      "question_type": "coding",
+      "title": "Dictionary Operations and Data Analysis", 
+      "description": "Write a function that takes a list of student records (dictionaries) and returns the student with the highest grade. Each student record has 'name' and 'grade' keys.\n\nFunction signature: find_top_student(students: List[Dict]) -> Dict\n\nExample:\n- find_top_student([{'name': 'Alice', 'grade': 95}, {'name': 'Bob', 'grade': 87}]) → {'name': 'Alice', 'grade': 95}",
+      "default_code": "def find_top_student(students):\n    \"\"\"\n    Finds the student with the highest grade.\n    \n    Args:\n        students (List[Dict]): List of student dictionaries with 'name' and 'grade'\n    \n    Returns:\n        Dict: Student record with highest grade\n    \"\"\"\n    # Your code here\n    pass\n\n# Test your function\ntest_students = [\n    {'name': 'Alice', 'grade': 95},\n    {'name': 'Bob', 'grade': 87},\n    {'name': 'Charlie', 'grade': 92}\n]\nprint(find_top_student(test_students))",
+      "test_cases": [
+        {
+          "input": "[{'name': 'Alice', 'grade': 95}, {'name': 'Bob', 'grade': 87}]",
+          "expected_output": "{'name': 'Alice', 'grade': 95}",
+          "points": 10,
+          "is_hidden": false,
+          "explanation": "Basic test with two students"
+        },
+        {
+          "input": "[{'name': 'John', 'grade': 100}]",
+          "expected_output": "{'name': 'John', 'grade': 100}",
+          "points": 5,
+          "is_hidden": false,
+          "explanation": "Single student test"
+        },
+        {
+          "input": "[{'name': 'X', 'grade': 78}, {'name': 'Y', 'grade': 99}, {'name': 'Z', 'grade': 85}]",
+          "expected_output": "{'name': 'Y', 'grade': 99}",
+          "points": 10,
+          "is_hidden": true,
+          "explanation": "Hidden test with multiple students"
+        }
+      ],
+      "points": 25,
+      "time_limit_minutes": 25,
+      "hints": "Use max() function with a key parameter, or iterate through the list keeping track of the highest grade."
+    }
+  ]
+}

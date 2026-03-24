@@ -1,0 +1,66 @@
+{
+  "title": "Data Structures Fundamentals", 
+  "description": "Basic understanding of Python data structures and their operations.",
+  "time_limit_minutes": 30,
+  "order": 1,
+  "instructions": "Answer all questions about lists, dictionaries, sets, and tuples.",
+  "questions": [
+    {
+      "id": "q1_ds_mcq",
+      "question_type": "multiple_choice",
+      "title": "Data Structure Complexity",
+      "description": "Which data structure provides O(1) average case lookup time?",
+      "options": [
+        {"id": "opt1", "text": "List"},
+        {"id": "opt2", "text": "Dictionary (Hash Table)"},
+        {"id": "opt3", "text": "Set"},
+        {"id": "opt4", "text": "Tuple"}
+      ],
+      "correct_option_ids": ["opt2", "opt3"],
+      "points": 15,
+      "explanation": "Both dictionaries and sets use hash tables for O(1) average lookup time.",
+      "shuffle_options": true
+    },
+    {
+      "id": "q2_ds_fill",
+      "question_type": "fill_in_blank",
+      "title": "List Operations",
+      "description": "Complete the code for common list operations:",
+      "text_with_blanks": "To add an item to the end of a list, use _____. To remove and return the last item, use _____. To find the index of an item, use _____.",
+      "correct_answers": [
+        ["append", "list.append()"],
+        ["pop", "list.pop()"],
+        ["index", "list.index()"]
+      ],
+      "points": 18,
+      "case_sensitive": false,
+      "explanation": "append() adds to end, pop() removes from end, index() finds position."
+    },
+    {
+      "id": "q3_ds_coding",
+      "question_type": "coding",
+      "title": "Dictionary Manipulation",
+      "description": "Write a function that merges two dictionaries and returns the result. If keys overlap, values should be summed.\n\nExample: merge_dicts({'a': 1, 'b': 2}, {'b': 3, 'c': 4}) → {'a': 1, 'b': 5, 'c': 4}",
+      "default_code": "def merge_dicts(dict1, dict2):\n    \"\"\"\n    Merge two dictionaries, summing values for overlapping keys.\n    \n    Args:\n        dict1, dict2: Dictionaries with numeric values\n    \n    Returns:\n        dict: Merged dictionary with summed values\n    \"\"\"\n    # Your code here\n    pass\n\n# Test\nresult = merge_dicts({'a': 1, 'b': 2}, {'b': 3, 'c': 4})\nprint(result)",
+      "test_cases": [
+        {
+          "input": "({'a': 1, 'b': 2}, {'b': 3, 'c': 4})",
+          "expected_output": "{'a': 1, 'b': 5, 'c': 4}",
+          "points": 15,
+          "is_hidden": false,
+          "explanation": "Basic merge with overlap"
+        },
+        {
+          "input": "({'x': 10}, {'y': 20})",
+          "expected_output": "{'x': 10, 'y': 20}",
+          "points": 10,
+          "is_hidden": true,
+          "explanation": "No overlap case"
+        }
+      ],
+      "points": 25,
+      "time_limit_minutes": 15,
+      "hints": "Use dict.get() to handle missing keys safely."
+    }
+  ]
+}

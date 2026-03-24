@@ -1,0 +1,480 @@
+COURSE CONTROLLER API REFERENCE
+Base Path: /api/courses
+
+====================================================================
+1) LIST COURSES
+====================================================================
+Method: GET
+Path: /
+Full Endpoint: /api/courses/
+
+What it does:
+- Returns course cards for homepage.
+- If user_id is provided, response includes user plan info and enrollment count.
+- Decides button action per course:
+  - ENROLL
+  - CONTINUE_LEARNING
+  - PREVIEW
+
+Input:
+- Query Params:
+  - user_id (optional, string)
+  - limit (optional, int, default=20, min=1, max=100)
+
+Output (CourseListResponse):
+- user_id: string | null
+- plan_name: string | null
+- course_limit: int | null
+- enrolled_count: int | null
+- courses: [
+    {
+      course_id: string,
+      title: string,
+      instructor_name: string,
+      progress_percentage: int,
+      level: string,
+      duration_hours: float,
+      key_technologies: string[],
+      action: string
+    }
+  ]
+
+
+====================================================================
+2) GET USER ENROLLMENTS
+====================================================================
+Method: GET
+Path: /user-enrollments/{user_id}
+Full Endpoint: /api/courses/user-enrollments/{user_id}
+
+What it does:
+- Returns all courses the user has enrolled in.
+- Includes progress percentage and course status (JUST_ENROLLED, IN_PROGRESS, COMPLETED).
+
+Input:
+- Path Params:
+  - user_id (required, string)
+
+Output (UserEnrollmentsResponse):
+- user_id: string
+- enrolled_count: int
+- enrolled_courses: [
+    {
+      course_id: string,
+      title: string,
+      progress_percentage: int (0-100),
+      status: string (JUST_ENROLLED | IN_PROGRESS | COMPLETED)
+    }
+  ]
+
+
+====================================================================
+2.1) GET USER ENROLLMENTS COUNT
+====================================================================
+Method: GET
+Path: /user-enrollments/{user_id}/count
+Full Endpoint: /api/courses/user-enrollments/{user_id}/count
+
+What it does:
+- Returns lightweight enrollment data with just count and course IDs.
+- No course details, minimal data transfer.
+
+Input:
+- Path Params:
+  - user_id (required, string)
+
+Output (UserEnrollmentsCountResponse):
+- user_id: string
+- enrolled_count: int
+- course_ids: string[]
+
+
+====================================================================
+2.2) GET USER ENROLLMENTS DETAIL
+====================================================================
+Method: GET
+Path: /user-enrollments/{user_id}/details
+Full Endpoint: /api/courses/user-enrollments/{user_id}/details
+
+What it does:
+- Returns comprehensive enrollment data including full course details.
+- Includes description, level, duration, technologies and progress.
+
+Input:
+- Path Params:
+  - user_id (required, string)
+
+Output (UserEnrollmentsDetailResponse):
+- user_id: string
+- enrolled_count: int
+- enrolled_courses: [
+    {
+      course_id: string,
+      title: string,
+  instructor_name: string,
+      description: string,
+      level: string,
+      duration_hours: float,
+      progress_percentage: int (0-100),
+      key_technologies: string[],
+      status: string (JUST_ENROLLED | IN_PROGRESS | COMPLETED)
+    }
+  ]
+
+
+====================================================================
+3) ENROLL IN COURSE
+====================================================================
+Method: POST
+Path: /enroll
+Full Endpoint: /api/courses/enroll
+
+What it does:
+- Enrolls user into a course.
+- Validates plan status and course limit from UI-provided payload.
+- Blocks if user already reached limit.
+
+Input Body (EnrollmentRequest):
+{
+  "user_id": "string",
+  "course_id": "string",
+  "planType": "GOLD | SILVER | ...",
+  "status": "ACTIVE | TRIAL | INACTIVE",
+  "coursesLimit": 10
+}
+
+Output (ApiStatusResponse):
+- status: string (ENROLLED or ALREADY_ENROLLED)
+- message: string
+
+
+====================================================================
+4) GET COURSE DETAIL
+====================================================================
+Method: GET
+Path: /{course_id}
+Full Endpoint: /api/courses/{course_id}
+
+What it does:
+- Returns single course detail page data.
+- Requires enrolled/allowed user access.
+
+Input:
+- Path Params:
+  - course_id (required, string)
+- Query Params:
+  - user_id (required, string)
+
+Output (CourseDetailResponse):
+- course_id: string
+- title: string
+- description: string
+- level: string
+- duration_hours: float
+- prerequisites: string[]
+- key_topics: string[]
+- key_technologies: string[]
+
+
+====================================================================
+5) LIST COURSE MODULES
+====================================================================
+Method: GET
+Path: /{course_id}/modules
+Full Endpoint: /api/courses/{course_id}/modules
+
+What it does:
+- Returns modules with user-wise progress summary.
+- Includes completed topics count and completion percentage.
+
+Input:
+- Path Params:
+  - course_id (required, string)
+- Query Params:
+  - user_id (required, string)
+
+Output (CourseModulesResponse):
+- course_id: string
+- user_id: string
+- modules: [
+    {
+      module_id: string,
+      title: string,
+      total_topics: int,
+      completed_topics: int,
+      completion_percentage: int
+    }
+  ]
+
+
+====================================================================
+6) LIST TOPICS IN MODULE
+====================================================================
+Method: GET
+Path: /{course_id}/modules/{module_id}/topics
+Full Endpoint: /api/courses/{course_id}/modules/{module_id}/topics
+
+What it does:
+- Returns topics under a module.
+- Includes locked flag and user-specific status.
+
+Input:
+- Path Params:
+  - course_id (required, string)
+  - module_id (required, string)
+- Query Params:
+  - user_id (required, string)
+
+Output (ModuleTopicsResponse):
+- course_id: string
+- module_id: string
+- user_id: string
+- topics: [
+    {
+      topic_id: string,
+      title: string,
+      description: string,
+      duration_minutes: int,
+      locked: bool,
+      status: string
+    }
+  ]
+
+
+====================================================================
+7) UPDATE TOPIC PROGRESS
+====================================================================
+Method: PUT
+Path: /{course_id}/modules/{module_id}/topics/{topic_id}/progress
+Full Endpoint: /api/courses/{course_id}/modules/{module_id}/topics/{topic_id}/progress
+
+What it does:
+- Updates topic progress status for a user.
+- Recalculates enrollment-level course progress.
+
+Input:
+- Path Params:
+  - course_id (required, string)
+  - module_id (required, string)
+  - topic_id (required, string)
+- Body (TopicProgressRequest):
+{
+  "user_id": "string",
+  "status": "NOT_STARTED | IN_PROGRESS | STARTED | COMPLETED | ENDED"
+}
+
+Output (ApiStatusResponse):
+- status: string (UPDATED)
+- message: string
+
+
+====================================================================
+8) CREATE COURSE
+====================================================================
+Method: POST
+Path: /
+Full Endpoint: /api/courses/
+
+What it does:
+- Creates a course list item and course metadata item.
+
+Input Body (CourseUpsertRequest):
+{
+  "course_id": "optional string",
+  "title": "string",
+  "instructor_name": "string",
+  "description": "string",
+  "level": "string",
+  "duration_hours": 0,
+  "prerequisites": [],
+  "key_topics": [],
+  "key_technologies": []
+}
+
+Output (ApiStatusResponse):
+- status: string (CREATED)
+- message: string
+
+
+====================================================================
+9) UPDATE COURSE
+====================================================================
+Method: PUT
+Path: /{course_id}
+Full Endpoint: /api/courses/{course_id}
+
+What it does:
+- Updates course list + metadata fields.
+
+Input:
+- Path Params:
+  - course_id (required, string)
+- Body: CourseUpsertRequest
+
+Output (ApiStatusResponse):
+- status: string (UPDATED)
+- message: string
+
+
+====================================================================
+10) DELETE COURSE
+====================================================================
+Method: DELETE
+Path: /{course_id}
+Full Endpoint: /api/courses/{course_id}
+
+What it does:
+- Deletes course list row, metadata, modules, topics and enrollment records for that course.
+
+Input:
+- Path Params:
+  - course_id (required, string)
+
+Output (ApiStatusResponse):
+- status: string (DELETED)
+- message: string
+
+
+====================================================================
+11) CREATE MODULE
+====================================================================
+Method: POST
+Path: /{course_id}/modules
+Full Endpoint: /api/courses/{course_id}/modules
+
+What it does:
+- Creates module under course.
+
+Input:
+- Path Params:
+  - course_id (required, string)
+- Body (ModuleUpsertRequest):
+{
+  "module_id": "optional string",
+  "title": "string",
+  "description": "string"
+}
+
+Output (ApiStatusResponse):
+- status: string (CREATED)
+- message: string
+
+
+====================================================================
+12) UPDATE MODULE
+====================================================================
+Method: PUT
+Path: /{course_id}/modules/{module_id}
+Full Endpoint: /api/courses/{course_id}/modules/{module_id}
+
+What it does:
+- Updates module title/description.
+
+Input:
+- Path Params:
+  - course_id (required, string)
+  - module_id (required, string)
+- Body: ModuleUpsertRequest
+
+Output (ApiStatusResponse):
+- status: string (UPDATED)
+- message: string
+
+
+====================================================================
+13) DELETE MODULE
+====================================================================
+Method: DELETE
+Path: /{course_id}/modules/{module_id}
+Full Endpoint: /api/courses/{course_id}/modules/{module_id}
+
+What it does:
+- Deletes module and all topics under it.
+
+Input:
+- Path Params:
+  - course_id (required, string)
+  - module_id (required, string)
+
+Output (ApiStatusResponse):
+- status: string (DELETED)
+- message: string
+
+
+====================================================================
+14) CREATE TOPIC
+====================================================================
+Method: POST
+Path: /{course_id}/topics
+Full Endpoint: /api/courses/{course_id}/topics
+
+What it does:
+- Creates topic under a module.
+
+Input:
+- Path Params:
+  - course_id (required, string)
+- Body (TopicUpsertRequest):
+{
+  "module_id": "string",
+  "topic_id": "optional string",
+  "title": "string",
+  "description": "string",
+  "duration_minutes": 0,
+  "locked": false,
+  "status": "NOT_STARTED"
+}
+
+Output (ApiStatusResponse):
+- status: string (CREATED)
+- message: string
+
+
+====================================================================
+15) UPDATE TOPIC
+====================================================================
+Method: PUT
+Path: /{course_id}/modules/{module_id}/topics/{topic_id}
+Full Endpoint: /api/courses/{course_id}/modules/{module_id}/topics/{topic_id}
+
+What it does:
+- Updates topic fields.
+
+Input:
+- Path Params:
+  - course_id (required, string)
+  - module_id (required, string)
+  - topic_id (required, string)
+- Body: TopicUpsertRequest
+
+Output (ApiStatusResponse):
+- status: string (UPDATED)
+- message: string
+
+
+====================================================================
+16) DELETE TOPIC
+====================================================================
+Method: DELETE
+Path: /{course_id}/modules/{module_id}/topics/{topic_id}
+Full Endpoint: /api/courses/{course_id}/modules/{module_id}/topics/{topic_id}
+
+What it does:
+- Deletes one topic.
+
+Input:
+- Path Params:
+  - course_id (required, string)
+  - module_id (required, string)
+  - topic_id (required, string)
+
+Output (ApiStatusResponse):
+- status: string (DELETED)
+- message: string
+
+
+====================================================================
+NOTES
+====================================================================
+- Enrollment limit checks are based on values sent by UI in enroll payload.
+- If limit is reached, API returns: "Enrollment limit is over for <plan>. Upgrade your subscription plan."

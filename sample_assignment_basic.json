@@ -1,0 +1,15 @@
+{
+  "title": "Advanced Python Programming Assessment",
+  "course_id": "cs202",
+  "course_name": "Data Structures and Algorithms",
+  "description": "A comprehensive assessment covering advanced Python concepts, data structures, and algorithmic thinking. This assignment is structured into multiple sections covering different topics.",
+  "created_by": "instructor_jane_smith",
+  "instructor_name": "Dr. Jane Smith",
+  "start_date": "2026-03-25T09:00:00",
+  "deadline": "2026-04-30T23:59:59",
+  "is_locked": false,
+  "level": "advanced",
+  "max_attempts": 2,
+  "tags": ["python", "algorithms", "data-structures", "advanced"],
+  "instructions": "This assignment is divided into sections. Complete each section within the time limit. You can save progress and return later. Total time is sum of all section times."
+}

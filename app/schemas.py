@@ -44,3 +44,31 @@ class InterviewFeedbackResponse(BaseModel):
     summary: str
     question_feedback: List[QuestionFeedback]
     behavioral_feedback: Optional[dict] = None
+
+
+class UserInterviewCountResponse(BaseModel):
+    user_id: str
+    interview_count: int
+
+
+class InterviewQuotaCheckRequest(BaseModel):
+    user_id: str
+    planType: Optional[str] = None
+    status: Optional[str] = "ACTIVE"
+    interviewsLimit: int
+    planStartDate: str
+
+
+class InterviewQuotaCheckResponse(BaseModel):
+    user_id: str
+    plan_type: str
+    subscription_status: str
+    period: str
+    cycle_start: str
+    renews_at: str
+    interviews_limit: int
+    used_interviews: int
+    remaining_interviews: int
+    can_start_interview: bool
+    slot_consumed: bool
+    message: str

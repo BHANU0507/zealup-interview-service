@@ -1,0 +1,51 @@
+{
+  "title": "Object-Oriented Programming",
+  "description": "Classes, inheritance, polymorphism, and design patterns in Python.",
+  "time_limit_minutes": 35,
+  "order": 3,
+  "instructions": "Demonstrate understanding of OOP principles and Python class implementation.",
+  "questions": [
+    {
+      "id": "q7_oop_coding",
+      "question_type": "coding", 
+      "title": "Class Design and Inheritance",
+      "description": "Create a Vehicle base class and a Car subclass. Vehicle should have make, model, year. Car should add fuel_capacity. Both should have a string representation.\n\nRequirements:\n- Vehicle.__init__(make, model, year)\n- Car.__init__(make, model, year, fuel_capacity)\n- __str__ method for both classes",
+      "default_code": "class Vehicle:\n    \"\"\"Base vehicle class\"\"\"\n    def __init__(self, make, model, year):\n        # Your code here\n        pass\n    \n    def __str__(self):\n        # Your code here\n        pass\n\nclass Car(Vehicle):\n    \"\"\"Car class inheriting from Vehicle\"\"\"\n    def __init__(self, make, model, year, fuel_capacity):\n        # Your code here\n        pass\n    \n    def __str__(self):\n        # Your code here\n        pass\n\n# Test\ncar = Car(\"Toyota\", \"Camry\", 2022, 60)\nprint(car)",
+      "test_cases": [
+        {
+          "input": "Car('Honda', 'Civic', 2021, 50)",
+          "expected_output": "2021 Honda Civic (50L tank)",
+          "points": 20,
+          "is_hidden": false,
+          "explanation": "Basic class creation and string representation"
+        },
+        {
+          "input": "Vehicle('Ford', 'F-150', 2020)",
+          "expected_output": "2020 Ford F-150",
+          "points": 15,
+          "is_hidden": true,
+          "explanation": "Base class functionality"
+        }
+      ],
+      "points": 35,
+      "time_limit_minutes": 25,
+      "hints": "Use super() to call parent class methods. Format strings appropriately."
+    },
+    {
+      "id": "q8_oop_mcq",
+      "question_type": "multiple_choice",
+      "title": "OOP Principles", 
+      "description": "Which of the following best describes polymorphism in Python?",
+      "options": [
+        {"id": "opt1", "text": "A class having multiple constructors"},
+        {"id": "opt2", "text": "The ability of different objects to respond to the same interface"},
+        {"id": "opt3", "text": "Hiding internal implementation details"},
+        {"id": "opt4", "text": "Creating new classes based on existing ones"}
+      ],
+      "correct_option_ids": ["opt2"],
+      "points": 12,
+      "explanation": "Polymorphism allows objects of different types to be treated uniformly through a common interface.",
+      "shuffle_options": true
+    }
+  ]
+}

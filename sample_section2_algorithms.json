@@ -1,0 +1,73 @@
+{
+  "title": "Algorithms and Problem Solving",
+  "description": "Algorithmic thinking, recursion, and problem-solving techniques.",
+  "time_limit_minutes": 45,
+  "order": 2,
+  "instructions": "Focus on algorithm design and implementation. Pay attention to time complexity.",
+  "questions": [
+    {
+      "id": "q4_algo_coding",
+      "question_type": "coding",
+      "title": "Binary Search Implementation",
+      "description": "Implement binary search on a sorted array. Return the index of the target element or -1 if not found.\n\nFunction signature: binary_search(arr: List[int], target: int) -> int",
+      "default_code": "def binary_search(arr, target):\n    \"\"\"\n    Binary search implementation.\n    \n    Args:\n        arr: Sorted list of integers\n        target: Integer to search for\n    \n    Returns:\n        int: Index of target or -1 if not found\n    \"\"\"\n    # Your code here\n    pass\n\n# Test\narr = [1, 3, 5, 7, 9, 11, 13]\nprint(binary_search(arr, 7))  # Should return 3",
+      "test_cases": [
+        {
+          "input": "([1, 3, 5, 7, 9], 5)",
+          "expected_output": "2",
+          "points": 12,
+          "is_hidden": false,
+          "explanation": "Find element in middle"
+        },
+        {
+          "input": "([1, 3, 5, 7, 9], 1)",
+          "expected_output": "0",
+          "points": 8,
+          "is_hidden": false,
+          "explanation": "Find first element"
+        },
+        {
+          "input": "([1, 3, 5, 7, 9], 10)",
+          "expected_output": "-1",
+          "points": 10,
+          "is_hidden": true,
+          "explanation": "Element not found"
+        }
+      ],
+      "points": 30,
+      "time_limit_minutes": 20,
+      "hints": "Use two pointers (left, right) and narrow the search space by half each iteration."
+    },
+    {
+      "id": "q5_algo_mcq",
+      "question_type": "multiple_choice",
+      "title": "Algorithm Complexity Analysis",
+      "description": "What is the time complexity of the following operations on a balanced binary search tree of n elements?",
+      "options": [
+        {"id": "opt1", "text": "Search: O(n), Insert: O(n), Delete: O(n)"},
+        {"id": "opt2", "text": "Search: O(log n), Insert: O(log n), Delete: O(log n)"},
+        {"id": "opt3", "text": "Search: O(1), Insert: O(1), Delete: O(1)"},
+        {"id": "opt4", "text": "Search: O(log n), Insert: O(1), Delete: O(n)"}
+      ],
+      "correct_option_ids": ["opt2"],
+      "points": 20,
+      "explanation": "Balanced BST maintains O(log n) for all basic operations due to its height being log n.",
+      "shuffle_options": true
+    },
+    {
+      "id": "q6_algo_fill",
+      "question_type": "fill_in_blank",
+      "title": "Recursion Concepts",
+      "description": "Complete the statements about recursion:",
+      "text_with_blanks": "A recursive function must have a _____ case to prevent infinite recursion. The recursive case should make progress toward the _____ case. Each recursive call creates a new _____ frame.",
+      "correct_answers": [
+        ["base", "terminal", "stopping"],
+        ["base", "terminal", "stopping"],
+        ["stack", "function", "call"]
+      ],
+      "points": 15,
+      "case_sensitive": false,
+      "explanation": "Base case stops recursion, progress ensures termination, stack frames manage calls."
+    }
+  ]
+}
