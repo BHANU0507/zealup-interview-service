@@ -14,6 +14,7 @@ DYNAMODB_TABLE3 = os.getenv("DYNAMODB_TABLE3")
 DYNAMODB_TABLE4 = os.getenv("DYNAMODB_TABLE4")
 DYNAMODB_COURSES_TABLE = os.getenv("DYNAMODB_COURSES_TABLE") or os.getenv("DYNAMODB_TABLE5")
 DYNAMODB_COURSE_ENROLLMENTS_TABLE = os.getenv("DYNAMODB_COURSE_ENROLLMENTS_TABLE") or os.getenv("DYNAMODB_TABLE6")
+DYNAMODB_ROADMAPS_TABLE = os.getenv("DYNAMODB_ROADMAPS_TABLE") or os.getenv("DYNAMODB_TABLE7")
 
 # Create DynamoDB resource
 dynamodb = boto3.resource(
@@ -37,3 +38,4 @@ course_enrollments_table = (
     if DYNAMODB_COURSE_ENROLLMENTS_TABLE
     else None
 )
+roadmaps_table = dynamodb.Table(DYNAMODB_ROADMAPS_TABLE) if DYNAMODB_ROADMAPS_TABLE else None

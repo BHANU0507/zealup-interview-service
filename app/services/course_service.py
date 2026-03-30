@@ -1097,6 +1097,14 @@ def update_topic_progress(course_id: str, module_id: str, topic_id: str, user_id
             }
         )
 
+    # Auto-progress any linked roadmap topics when a topic is marked complete
+    if normalized in {"ENDED", "COMPLETED"}:
+        try:
+            from app.services.roadmap_service import auto_complete_linked_roadmap_topics
+            auto_complete_linked_roadmap_topics(user_id, course_id, module_id, topic_id)
+        except Exception:
+            pass  # Never let roadmap sync break the course-progress response
+
     return {
         "status": "UPDATED",
         "message": "Topic progress updated",
