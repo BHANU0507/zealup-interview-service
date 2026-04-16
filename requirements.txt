@@ -7,3 +7,5 @@ python-dotenv
 playwright
 jinja2
 httpx
+pymysql
+sqlalchemy

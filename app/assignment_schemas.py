@@ -114,8 +114,6 @@ class CreateAssignmentRequest(BaseModel):
     created_by: str  # instructor/admin ID
     instructor_name: Optional[str] = None
     # Removed direct questions - now handled via sections
-    start_date: Optional[datetime] = None
-    deadline: Optional[datetime] = None
     is_locked: Optional[bool] = False
     level: Optional[Literal["beginner", "intermediate", "advanced"]] = "intermediate"
     max_attempts: Optional[int] = None  # None = unlimited
@@ -143,8 +141,6 @@ class UpdateAssignmentRequest(BaseModel):
     course_id: Optional[str] = None
     course_name: Optional[str] = None
     instructor_name: Optional[str] = None
-    start_date: Optional[datetime] = None
-    deadline: Optional[datetime] = None
     is_locked: Optional[bool] = None
     level: Optional[Literal["beginner", "intermediate", "advanced"]] = None
     max_attempts: Optional[int] = None
@@ -169,8 +165,6 @@ class AssignmentDetailResponse(BaseModel):
     sections: List[AssignmentSection]  # Changed from questions to sections
     total_points: int
     total_time_minutes: int
-    start_date: Optional[datetime]
-    deadline: Optional[datetime]
     is_locked: bool
     level: str
     max_attempts: Optional[int]

@@ -228,20 +228,7 @@ def create_assignment(payload: Dict[str, Any]) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Description is required")
     if not payload.get("created_by"):
         raise HTTPException(status_code=400, detail="created_by is required")
-    
-    # Validate availability window
-    start_date = payload.get("start_date")
-    deadline = payload.get("deadline")
-    
-    if start_date and deadline:
-        start_dt = _parse_dt_aware(start_date)
-        deadline_dt = _parse_dt_aware(deadline)
-        if start_dt and deadline_dt and start_dt >= deadline_dt:
-            raise HTTPException(
-                status_code=400,
-                detail="start_date must be before deadline"
-            )
-    
+
     assignment_data = {
         "PK": assignment_id,
         "SK": "ASSIGNMENT",
@@ -256,8 +243,6 @@ def create_assignment(payload: Dict[str, Any]) -> Dict[str, Any]:
         "total_points": 0,  # Will be calculated from sections
         "total_time_minutes": 0,  # Will be calculated from sections
         "section_count": 0,
-        "start_date": _normalize_datetime(payload.get("start_date")),
-        "deadline": _normalize_datetime(payload.get("deadline")),
         "is_locked": payload.get("is_locked", False),
         "level": payload.get("level", "intermediate"),
         "max_attempts": payload.get("max_attempts"),  # None = unlimited
@@ -618,18 +603,6 @@ def get_assignment(assignment_id: str) -> Dict[str, Any]:
                     pass
         
         # Parse dates back to datetime objects if needed
-        if assignment.get("start_date"):
-            try:
-                assignment["start_date"] = datetime.fromisoformat(assignment["start_date"])
-            except ValueError:
-                pass
-        
-        if assignment.get("deadline"):
-            try:
-                assignment["deadline"] = datetime.fromisoformat(assignment["deadline"])
-            except ValueError:
-                pass
-                
         if assignment.get("created_at"):
             try:
                 assignment["created_at"] = datetime.fromisoformat(assignment["created_at"])
@@ -678,14 +651,6 @@ def update_assignment(assignment_id: str, payload: Dict[str, Any]) -> Dict[str, 
             update_expression += f", {alias} = :{field}"
             expression_names[alias] = field
             expression_values[f":{field}"] = payload[field]
-
-    if "start_date" in payload:
-        update_expression += ", start_date = :start_date"
-        expression_values[":start_date"] = _normalize_datetime(payload["start_date"])
-
-    if "deadline" in payload:
-        update_expression += ", deadline = :deadline"
-        expression_values[":deadline"] = _normalize_datetime(payload["deadline"])
 
     update_kwargs: Dict[str, Any] = {
         "Key": {"PK": assignment_id, "SK": "ASSIGNMENT"},
@@ -1320,11 +1285,6 @@ def submit_section_for_user(
         raise HTTPException(status_code=400, detail="Assignment is locked")
 
     now_dt = _now_dt()
-    raw_deadline = assignment.get("deadline")
-    if raw_deadline:
-        dl = _parse_dt_aware(raw_deadline)
-        if dl and dl < now_dt:
-            raise HTTPException(status_code=400, detail="Assignment deadline has passed")
 
     # Attempt-limit check (based on final assignment submission count)
     max_attempts = assignment.get("max_attempts")

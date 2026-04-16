@@ -1,4 +1,8 @@
-from fastapi import APIRouter, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Query, UploadFile
+from typing import Optional
+from sqlalchemy.orm import Session
+
+from app.mysql_db import get_db
 
 from app.challenge_schemas import (
     CreateChallengeRequest,
@@ -16,6 +20,8 @@ from app.challenge_schemas import (
     RunTestsResponse,
     ScoreboardResponse,
     UserSubmissionListResponse,
+    CollegeRankResponse,
+    GlobalRankResponse,
 )
 from app.services.challenge_service import (
     bulk_create_challenges_from_csv,
@@ -23,6 +29,8 @@ from app.services.challenge_service import (
     create_challenge,
     delete_challenge,
     get_challenge,
+    get_college_rank,
+    get_global_rank,
     get_languages,
     get_scoreboard,
     get_submission_detail,
@@ -31,6 +39,8 @@ from app.services.challenge_service import (
     run_visible_tests,
     submit_challenge,
     update_challenge,
+    get_college_challenge_stats,
+    get_college_challenge_leaderboard,
 )
 
 
@@ -50,6 +60,7 @@ def list_challenges_endpoint(
     keyword: str | None = None,
     created_by: str | None = None,
     user_id: str | None = Query(None, alias="userId"),
+    college_id: str | None = Query(None, alias="collegeId"),
     page_size: int = Query(10, ge=1, le=100),
     start_key: str | None = None,
 ):
@@ -60,6 +71,7 @@ def list_challenges_endpoint(
         keyword=keyword,
         created_by=created_by,
         user_id=user_id,
+        college_id=college_id,
         page_size=page_size,
         start_key=start_key,
     )
@@ -68,6 +80,21 @@ def list_challenges_endpoint(
 @router.get("/languages")
 def list_languages_endpoint():
     return get_languages()
+
+
+@router.get("/college-rank", response_model=CollegeRankResponse)
+def college_rank_endpoint(
+    user_id: str = Query(..., alias="userId"),
+    college_id: str = Query(..., alias="collegeId"),
+):
+    return get_college_rank(user_id, college_id)
+
+
+@router.get("/global-rank", response_model=GlobalRankResponse)
+def global_rank_endpoint(
+    user_id: str = Query(..., alias="userId"),
+):
+    return get_global_rank(user_id)
 
 
 @router.get("/{challenge_id}", response_model=ChallengeDetailResponse)
@@ -134,3 +161,40 @@ def get_submission_endpoint(submission_id: str):
 async def upload_challenges(file: UploadFile = File(...)):
     content = (await file.read()).decode("utf-8-sig")
     return bulk_create_challenges_from_csv(content)
+
+
+# ---------------------------------------------------------------------------
+# College challenge analytics
+# ---------------------------------------------------------------------------
+
+@router.get("/college/{college_id}/stats")
+def college_challenge_stats(
+    college_id: str,
+    branch_id: Optional[str] = Query(None, description="Filter by branch name; omit for all branches"),
+    db: Session = Depends(get_db),
+):
+    """
+    High-level challenge stats for a college.
+
+    Returns:
+      - challenges_created : total challenges tagged with this college_id
+      - students_solved    : unique students who solved at least one challenge
+                             (scoped to branch when provided)
+    """
+    return get_college_challenge_stats(college_id, db, branch_id)
+
+
+@router.get("/college/{college_id}/leaderboard")
+def college_challenge_leaderboard(
+    college_id: str,
+    branch_id: Optional[str] = Query(None, description="Filter by branch name; omit for all branches"),
+    db: Session = Depends(get_db),
+):
+    """
+    Challenge leaderboard for a college, ranked by cumulative total score descending.
+    Optionally filtered to a single branch.
+
+    Response per entry:
+      rank | name | student_id | branch | challenges_solved | avg_score | total_score
+    """
+    return get_college_challenge_leaderboard(college_id, db, branch_id)

@@ -7,6 +7,10 @@ from app.routes.courses import router as courses_router
 from app.routes.assignments import router as assignments_router
 from app.routes.roadmap import router as roadmap_router
 from app.routes.college_cleanup import router as college_cleanup_router
+from app.routes.college_assignments import router as college_assignments_router
+from app.routes.dashboard import router as dashboard_router
+from app.routes.leaderboard import router as leaderboard_router
+from app.routes.proxy import router as proxy_router
 app = FastAPI(
     title="ZealUp Mock Interview API",
     description="""
@@ -29,3 +33,7 @@ app.include_router(courses_router, prefix="/api/courses", tags=["courses"])
 app.include_router(assignments_router, prefix="/api/assignments", tags=["assignments"])
 app.include_router(roadmap_router, prefix="/api/roadmaps", tags=["roadmaps"])
 app.include_router(college_cleanup_router, prefix="/api/college", tags=["college-cleanup"])
+app.include_router(college_assignments_router, prefix="/api/college-assignments", tags=["college-assignments"])
+app.include_router(dashboard_router, prefix="/api/dashboard", tags=["dashboard"])
+app.include_router(leaderboard_router, prefix="/api/leaderboard", tags=["leaderboard"])
+app.include_router(proxy_router, prefix="/api/proxy", tags=["proxy"])

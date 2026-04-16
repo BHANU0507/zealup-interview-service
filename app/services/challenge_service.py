@@ -188,6 +188,9 @@ def create_challenge(payload: Dict[str, Any]) -> Dict[str, Any]:
         "hints": payload.get("hints"),
         "test_cases": payload.get("test_cases"),
     }
+    # Only store college_id when present — omitting it ensures not_exists() filter works
+    if payload.get("college_id"):
+        metadata_item["college_id"] = payload["college_id"]
 
     tags = payload.get("tags") or []
     list_item = {
@@ -203,6 +206,8 @@ def create_challenge(payload: Dict[str, Any]) -> Dict[str, Any]:
         "created_at": now,
         "status": "ACTIVE",
     }
+    if payload.get("college_id"):
+        list_item["college_id"] = payload["college_id"]
 
     table2.put_item(Item=metadata_item)
     table2.put_item(Item=list_item)
@@ -445,6 +450,7 @@ def _build_challenge_filters(
     difficulty: Optional[str],
     tag: Optional[str],
     created_by: Optional[str],
+    college_id: Optional[str] = None,
 ) -> Optional[Any]:
     filters = []
 
@@ -456,6 +462,16 @@ def _build_challenge_filters(
         filters.append(Attr("created_by").eq(created_by))
     if tag:
         filters.append(Attr("tags").contains(tag))
+
+    # Show college challenges for this college + public challenges (no college_id)
+    if college_id:
+        filters.append(Attr("college_id").eq(college_id))
+    else:
+        # No college context: show only public challenges (no college_id stored)
+        # Handle both truly-missing attribute and legacy NULL-stored values
+        filters.append(
+            Attr("college_id").not_exists() | Attr("college_id").eq(None)
+        )
 
     if not filters:
         return None
@@ -512,6 +528,7 @@ def list_challenges(
     keyword: Optional[str] = None,
     created_by: Optional[str] = None,
     user_id: Optional[str] = None,
+    college_id: Optional[str] = None,
     page_size: int = 10,
     start_key: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -523,6 +540,7 @@ def list_challenges(
         difficulty=difficulty,
         tag=tag,
         created_by=created_by,
+        college_id=college_id,
     )
 
     decoded_key = _decode_key(start_key)
@@ -566,6 +584,7 @@ def list_challenges(
             "points": item.get("points", 0),
             "tags": item.get("tags", []),
             "created_by": item.get("created_by"),
+            "college_id": item.get("college_id"),
             "created_at": item.get("created_at", 0),
             "solved": challenge_id in solved_dict if user_id else None,
             "user_score": user_data.get("score") if user_data else None,
@@ -729,6 +748,67 @@ def run_visible_tests(challenge_id: str, language_id: int, source_code: str) -> 
     }
 
 
+def _update_college_rank(user_id: str, college_id: str, challenge_id: str, new_score: int) -> None:
+    """Update a college student's cumulative score in the college rank table."""
+    from decimal import Decimal
+
+    # Get the previous score for this challenge from the user's submission record
+    prev_item = table2.get_item(
+        Key={
+            "PK": f"USER#{user_id}",
+            "SK": f"SUBMISSION#{challenge_id}",
+        }
+    ).get("Item")
+
+    old_score = int(prev_item.get("score", 0)) if prev_item else 0
+    delta = new_score - old_score
+
+    # Atomically update (or create) the college rank entry
+    table2.update_item(
+        Key={
+            "PK": f"COLLEGE_RANK#{college_id}",
+            "SK": f"USER#{user_id}",
+        },
+        UpdateExpression="SET user_id = :uid, college_id = :cid, #ts = if_not_exists(#ts, :zero) + :delta",
+        ExpressionAttributeNames={"#ts": "total_score"},
+        ExpressionAttributeValues={
+            ":uid": user_id,
+            ":cid": college_id,
+            ":zero": Decimal("0"),
+            ":delta": Decimal(str(delta)),
+        },
+    )
+
+
+def _update_global_rank(user_id: str, challenge_id: str, new_score: int) -> None:
+    """Update an individual (non-college) user's cumulative score in the global rank table."""
+    from decimal import Decimal
+
+    prev_item = table2.get_item(
+        Key={
+            "PK": f"USER#{user_id}",
+            "SK": f"SUBMISSION#{challenge_id}",
+        }
+    ).get("Item")
+
+    old_score = int(prev_item.get("score", 0)) if prev_item else 0
+    delta = new_score - old_score
+
+    table2.update_item(
+        Key={
+            "PK": "GLOBAL_RANK",
+            "SK": f"USER#{user_id}",
+        },
+        UpdateExpression="SET user_id = :uid, #ts = if_not_exists(#ts, :zero) + :delta",
+        ExpressionAttributeNames={"#ts": "total_score"},
+        ExpressionAttributeValues={
+            ":uid": user_id,
+            ":zero": Decimal("0"),
+            ":delta": Decimal(str(delta)),
+        },
+    )
+
+
 def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     response = table2.get_item(
         Key={
@@ -743,6 +823,7 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
 
     challenge_type = item.get("challenge_type")
     user_id = payload.get("user_id")
+    college_id = payload.get("college_id") or None
     if not user_id:
         raise HTTPException(status_code=400, detail="user_id is required")
 
@@ -820,6 +901,7 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
                 "challenge_id": challenge_id,
                 "challenge_type": challenge_type,
                 "user_id": user_id,
+                "college_id": college_id,
                 "section_answers": section_answers,
                 "time_taken_seconds": payload.get("time_taken_seconds"),
                 "score": int(score),
@@ -828,6 +910,11 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
                 "results": results,
                 "created_at": now,
             }
+
+            if college_id:
+                _update_college_rank(user_id, college_id, challenge_id, int(score))
+            else:
+                _update_global_rank(user_id, challenge_id, int(score))
 
             table2.put_item(Item=submission_item)
 
@@ -839,6 +926,7 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
                 "challenge_title": item.get("title"),
                 "challenge_type": challenge_type,
                 "score": int(score),
+                "college_id": college_id,
                 "passed_count": correct_count,
                 "total_count": total_questions,
                 "time_taken_seconds": payload.get("time_taken_seconds"),
@@ -854,6 +942,7 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
                 "challenge_title": item.get("title"),
                 "challenge_type": challenge_type,
                 "user_id": user_id,
+                "college_id": college_id,
                 "section_answers": section_answers,
                 "time_taken_seconds": payload.get("time_taken_seconds"),
                 "score": int(score),
@@ -887,12 +976,18 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
             "challenge_id": challenge_id,
             "challenge_type": challenge_type,
             "user_id": user_id,
+            "college_id": college_id,
             "selected_answer": selected,
             "is_correct": is_correct,
             "score": int(score),
             "time_taken_seconds": payload.get("time_taken_seconds"),
             "created_at": now,
         }
+
+        if college_id:
+            _update_college_rank(user_id, college_id, challenge_id, int(score))
+        else:
+            _update_global_rank(user_id, challenge_id, int(score))
 
         table2.put_item(Item=submission_item)
 
@@ -904,6 +999,7 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
             "challenge_title": item.get("title"),
             "challenge_type": challenge_type,
             "score": int(score),
+            "college_id": college_id,
             "selected_answer": selected,
             "is_correct": is_correct,
             "time_taken_seconds": payload.get("time_taken_seconds"),
@@ -919,6 +1015,7 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
             "challenge_title": item.get("title"),
             "challenge_type": challenge_type,
             "user_id": user_id,
+            "college_id": college_id,
             "selected_answer": selected,
             "is_correct": is_correct,
             "score": int(score),
@@ -1011,6 +1108,7 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
         "challenge_id": challenge_id,
         "challenge_type": challenge_type,
         "user_id": user_id,
+        "college_id": college_id,
         "score": score,
         "passed_count": passed_count,
         "total_count": total_count,
@@ -1019,6 +1117,11 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
         "results": results,
         "created_at": now,
     }
+
+    if college_id:
+        _update_college_rank(user_id, college_id, challenge_id, score)
+    else:
+        _update_global_rank(user_id, challenge_id, score)
 
     table2.put_item(Item=submission_item)
 
@@ -1030,6 +1133,7 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
         "challenge_title": item.get("title"),
         "challenge_type": challenge_type,
         "score": score,
+        "college_id": college_id,
         "passed_count": passed_count,
         "total_count": total_count,
         "language_id": int(language_id),
@@ -1045,6 +1149,7 @@ def submit_challenge(challenge_id: str, payload: Dict[str, Any]) -> Dict[str, An
         "challenge_title": item.get("title"),
         "challenge_type": challenge_type,
         "user_id": user_id,
+        "college_id": college_id,
         "language_id": int(language_id),
         "source_code": source_code,
         "score": score,
@@ -1198,6 +1303,104 @@ def list_user_submissions(
     }
 
 
+def get_college_rank(user_id: str, college_id: str) -> Dict[str, Any]:
+    """Calculate the rank of a user among all students of their college."""
+    all_entries: List[Dict[str, Any]] = []
+    last_key = None
+
+    while True:
+        query_args: Dict[str, Any] = {
+            "KeyConditionExpression": Key("PK").eq(f"COLLEGE_RANK#{college_id}"),
+        }
+        if last_key:
+            query_args["ExclusiveStartKey"] = last_key
+
+        response = table2.query(**query_args)
+        all_entries.extend(response.get("Items", []))
+
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+
+    # Sort by total_score descending (higher score = better rank)
+    sorted_entries = sorted(
+        all_entries,
+        key=lambda x: int(x.get("total_score", 0)),
+        reverse=True,
+    )
+
+    user_entry = next(
+        (e for e in sorted_entries if e.get("user_id") == user_id),
+        None,
+    )
+    if not user_entry:
+        raise HTTPException(
+            status_code=404,
+            detail="User has no submissions for this college"
+        )
+
+    rank = next(
+        (idx + 1 for idx, e in enumerate(sorted_entries) if e.get("user_id") == user_id),
+        None,
+    )
+
+    return {
+        "user_id": user_id,
+        "college_id": college_id,
+        "rank": rank,
+        "total_score": int(user_entry.get("total_score", 0)),
+        "total_users": len(sorted_entries),
+    }
+
+
+def get_global_rank(user_id: str) -> Dict[str, Any]:
+    """Calculate the rank of an individual (non-college) user among all individual users."""
+    all_entries: List[Dict[str, Any]] = []
+    last_key = None
+
+    while True:
+        query_args: Dict[str, Any] = {
+            "KeyConditionExpression": Key("PK").eq("GLOBAL_RANK"),
+        }
+        if last_key:
+            query_args["ExclusiveStartKey"] = last_key
+
+        response = table2.query(**query_args)
+        all_entries.extend(response.get("Items", []))
+
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+
+    sorted_entries = sorted(
+        all_entries,
+        key=lambda x: int(x.get("total_score", 0)),
+        reverse=True,
+    )
+
+    user_entry = next(
+        (e for e in sorted_entries if e.get("user_id") == user_id),
+        None,
+    )
+    if not user_entry:
+        raise HTTPException(
+            status_code=404,
+            detail="User has no individual submissions"
+        )
+
+    rank = next(
+        (idx + 1 for idx, e in enumerate(sorted_entries) if e.get("user_id") == user_id),
+        None,
+    )
+
+    return {
+        "user_id": user_id,
+        "rank": rank,
+        "total_score": int(user_entry.get("total_score", 0)),
+        "total_users": len(sorted_entries),
+    }
+
+
 def _parse_list(value: Optional[str]) -> List[str]:
     if not value:
         return []
@@ -1267,4 +1470,217 @@ def bulk_create_challenges_from_csv(csv_text: str) -> Dict[str, Any]:
         "created": created,
         "created_count": len(created),
         "errors": errors,
+    }
+
+
+# ---------------------------------------------------------------------------
+# College challenge analytics (stats + leaderboard)
+# ---------------------------------------------------------------------------
+
+def get_college_challenge_stats(college_id: str, db: Any, branch_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Return high-level challenge stats for a college:
+    - challenges_created : total challenges tagged with this college_id
+    - students_solved    : unique students who solved ≥ 1 challenge for this college
+                           (filtered to branch when provided)
+    """
+    from boto3.dynamodb.conditions import Attr
+    from sqlalchemy import text as sql_text
+
+    # 1. Count challenges created for this college by scanning CHALLENGE_LIST
+    challenges_created = 0
+    last_key = None
+    while True:
+        scan_args: Dict[str, Any] = {
+            "KeyConditionExpression": Key("PK").eq("CHALLENGE_LIST"),
+            "FilterExpression": Attr("college_id").eq(college_id),
+            "Select": "COUNT",
+        }
+        if last_key:
+            scan_args["ExclusiveStartKey"] = last_key
+        resp = table2.query(**scan_args)
+        challenges_created += int(resp.get("Count", 0))
+        last_key = resp.get("LastEvaluatedKey")
+        if not last_key:
+            break
+
+    # 2. Count unique students who have a rank entry for this college
+    #    If branch filter is active, first resolve eligible user_ids from MySQL
+    all_rank_entries: List[Dict[str, Any]] = []
+    last_key = None
+    while True:
+        query_args: Dict[str, Any] = {
+            "KeyConditionExpression": Key("PK").eq(f"COLLEGE_RANK#{college_id}"),
+            "ProjectionExpression": "user_id",
+        }
+        if last_key:
+            query_args["ExclusiveStartKey"] = last_key
+        resp = table2.query(**query_args)
+        all_rank_entries.extend(resp.get("Items", []))
+        last_key = resp.get("LastEvaluatedKey")
+        if not last_key:
+            break
+
+    if branch_id:
+        # Filter to only user_ids that belong to this branch
+        rank_user_ids = [str(e.get("user_id", "")) for e in all_rank_entries if e.get("user_id")]
+        students_solved = 0
+        if rank_user_ids:
+            try:
+                placeholders = ", ".join(f":uid{i}" for i in range(len(rank_user_ids)))
+                params = {f"uid{i}": uid for i, uid in enumerate(rank_user_ids)}
+                params["branch_id"] = branch_id
+                row = db.execute(
+                    sql_text(
+                        f"""
+                        SELECT COUNT(*) AS cnt
+                        FROM   users
+                        WHERE  id IN ({placeholders})
+                          AND  branch_id = :branch_id
+                        """
+                    ),
+                    params,
+                ).fetchone()
+                students_solved = int(row.cnt) if row else 0
+            except Exception:
+                students_solved = 0
+    else:
+        students_solved = len(all_rank_entries)
+
+    return {
+        "college_id":         college_id,
+        "branch_filter":      branch_id,
+        "challenges_created": challenges_created,
+        "students_solved":    students_solved,
+    }
+
+
+def get_college_challenge_leaderboard(college_id: str, db: Any, branch_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Return challenge leaderboard for a college ranked by total score descending.
+    Enriches with MySQL profile (name, student_id, branch).
+    Optionally filtered to a single branch.
+
+    Response per entry: rank | name | student_id | branch | challenges_solved | avg_score | total_score
+    """
+    from boto3.dynamodb.conditions import Attr
+    from sqlalchemy import text as sql_text
+    from decimal import Decimal
+
+    # 1. Fetch all COLLEGE_RANK entries for this college
+    rank_entries: List[Dict[str, Any]] = []
+    last_key = None
+    while True:
+        query_args: Dict[str, Any] = {
+            "KeyConditionExpression": Key("PK").eq(f"COLLEGE_RANK#{college_id}"),
+        }
+        if last_key:
+            query_args["ExclusiveStartKey"] = last_key
+        resp = table2.query(**query_args)
+        rank_entries.extend(resp.get("Items", []))
+        last_key = resp.get("LastEvaluatedKey")
+        if not last_key:
+            break
+
+    if not rank_entries:
+        return {
+            "college_id":     college_id,
+            "total_students": 0,
+            "leaderboard":    [],
+        }
+
+    # 2. Per-user: count challenges solved + compute avg score for this college
+    def _user_challenge_stats(user_id: str) -> Dict[str, Any]:
+        solved_count = 0
+        score_sum    = 0
+        last_k       = None
+        while True:
+            q: Dict[str, Any] = {
+                "KeyConditionExpression": (
+                    Key("PK").eq(f"USER#{user_id}")
+                    & Key("SK").begins_with("SUBMISSION#")
+                ),
+                "FilterExpression": Attr("college_id").eq(college_id),
+                "ProjectionExpression": "score",
+            }
+            if last_k:
+                q["ExclusiveStartKey"] = last_k
+            r = table2.query(**q)
+            for item in r.get("Items", []):
+                solved_count += 1
+                raw = item.get("score", 0)
+                score_sum += int(raw) if not isinstance(raw, Decimal) else int(raw)
+            last_k = r.get("LastEvaluatedKey")
+            if not last_k:
+                break
+        avg_score = round(score_sum / solved_count, 2) if solved_count else 0.0
+        return {"challenges_solved": solved_count, "avg_score": avg_score}
+
+    # 3. MySQL: bulk-fetch profiles for all user_ids in one query
+    #    When branch filter is set, only include users from that branch
+    user_ids = [str(e.get("user_id", "")) for e in rank_entries if e.get("user_id")]
+    profiles: Dict[str, Dict[str, str]] = {}
+    if user_ids:
+        try:
+            placeholders = ", ".join(f":uid{i}" for i in range(len(user_ids)))
+            params = {f"uid{i}": uid for i, uid in enumerate(user_ids)}
+            branch_clause = ""
+            if branch_id:
+                branch_clause = "AND branch_id = :branch_id"
+                params["branch_id"] = branch_id
+            rows = db.execute(
+                sql_text(
+                    f"""
+                    SELECT id, name, student_id, branch
+                    FROM   users
+                    WHERE  id IN ({placeholders})
+                    {branch_clause}
+                    """
+                ),
+                params,
+            ).fetchall()
+            for row in rows:
+                profiles[str(row.id)] = {
+                    "name":       str(row.name or ""),
+                    "student_id": str(row.student_id or ""),
+                    "branch":     str(row.branch or ""),
+                }
+        except Exception:
+            pass
+
+    # 4. Sort by total_score descending — only include entries that have a profile
+    #    (when branch filter is set, users not in that branch have no profile entry)
+    rank_entries = [e for e in rank_entries if str(e.get("user_id", "")) in profiles]
+    rank_entries.sort(
+        key=lambda x: int(x.get("total_score", 0)),
+        reverse=True,
+    )
+
+    # 5. Assemble leaderboard
+    leaderboard: List[Dict[str, Any]] = []
+    rank = 1
+    for i, entry in enumerate(rank_entries):
+        if i > 0 and int(entry.get("total_score", 0)) < int(rank_entries[i - 1].get("total_score", 0)):
+            rank = i + 1
+        user_id   = str(entry.get("user_id", ""))
+        profile   = profiles.get(user_id, {})
+        ch_stats  = _user_challenge_stats(user_id)
+        total_score = int(entry.get("total_score", 0))
+        leaderboard.append(
+            {
+                "rank":              rank,
+                "name":              profile.get("name", ""),
+                "student_id":        profile.get("student_id", ""),
+                "branch":            profile.get("branch", ""),
+                "challenges_solved": ch_stats["challenges_solved"],
+                "avg_score":         ch_stats["avg_score"],
+                "total_score":       total_score,
+            }
+        )
+
+    return {
+        "college_id":     college_id,
+        "branch_filter":  branch_id,
+        "total_students": len(leaderboard),
+        "leaderboard":    leaderboard,
     }

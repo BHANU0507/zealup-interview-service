@@ -32,6 +32,7 @@ class CreateChallengeRequest(BaseModel):
     points: Optional[int] = None  # Auto-calculated from test cases for coding challenges
     tags: Optional[List[str]] = None
     created_by: Optional[str] = None
+    college_id: Optional[str] = None  # Set if created by a college student
     time_limit_minutes: Optional[int] = None  # For aptitude challenges
 
     # Aptitude fields (old format - single question)
@@ -111,6 +112,7 @@ class ChallengeSummary(BaseModel):
     tags: List[str]
     created_at: int
     created_by: Optional[str] = None
+    college_id: Optional[str] = None
     solved: Optional[bool] = None
     user_score: Optional[int] = None
     time_taken_seconds: Optional[int] = None
@@ -165,6 +167,7 @@ class SectionAnswers(BaseModel):
 
 class ChallengeSubmitRequest(BaseModel):
     user_id: str
+    college_id: Optional[str] = None  # Set if the submitting user is a college student
     selected_answer: Optional[str] = None  # For single-question aptitude
     language_id: Optional[int] = None
     source_code: Optional[str] = None
@@ -246,6 +249,21 @@ class ScoreboardEntry(BaseModel):
 class ScoreboardResponse(BaseModel):
     challenge_id: str
     entries: List[ScoreboardEntry]
+
+
+class CollegeRankResponse(BaseModel):
+    user_id: str
+    college_id: str
+    rank: int
+    total_score: int
+    total_users: int
+
+
+class GlobalRankResponse(BaseModel):
+    user_id: str
+    rank: int
+    total_score: int
+    total_users: int
 
 
 class UserSubmissionSummary(BaseModel):
